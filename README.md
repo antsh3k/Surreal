@@ -77,12 +77,19 @@ $$R(s, a) = - \text{FreeEnergy} \approx - (\underbrace{\text{Divergence from Sel
 
 ## 🛠 Tech Stack
 
+### Backend (`/backend/`)
+* **Framework:** **FastAPI** (High-performance async Python web framework)
+* **Package Manager:** **uv** (Fast Python package installer and resolver)
+* **Agent Orchestration:** **LangGraph** (Building stateful, multi-actor agent workflows)
+* **Language:** **Python 3.13+**
 * **Brain/Policy:** **Gemini 1.5 Pro** (Context processing, search synthesis, and content generation)
 * **Memory/State:** **MongoDB Atlas** (Storing the Knowledge Graph, Node Attributes, and Vector Embeddings)
 * **Grounding:** **Brave Search API** (Validating nodes against real-world information to reduce uncertainty)
-* **Feedback:** **MiniMax** (Auditory feedback for "System Surprise" levels - when uncertainty is high/low)
-* **Frontend:** Interactive radial graph visualization with real-time node expansion
 * **Embeddings:** Vector similarity for measuring semantic coherence and detecting contradictions
+
+### Frontend (`/frontend/`)
+* **Interactive radial graph visualization** with real-time node expansion
+* **Feedback:** **MiniMax** (Auditory feedback for "System Surprise" levels - when uncertainty is high/low)
 
 ---
 
@@ -95,12 +102,21 @@ $$R(s, a) = - \text{FreeEnergy} \approx - (\underbrace{\text{Divergence from Sel
 git clone https://github.com/yourusername/surreal-engine.git
 cd surreal-engine
 
-# Install dependencies
-pip install -r requirements.txt
+# Backend Setup
+cd backend
+# Install uv if not already installed
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install dependencies using uv
+uv sync
 
 # Setup Environment Variables
 cp .env.example .env
 # Add keys for: GEMINI_API_KEY, BRAVE_API_KEY, MONGODB_URI, MINIMAX_API_KEY
+
+# Frontend Setup
+cd ../frontend
+# (Frontend setup instructions will be added based on chosen framework)
 ```
 
 ### 2. Basic User Flow
@@ -127,8 +143,9 @@ app.initialize_topic("Active Inference in Neuroscience")
 
 **For developers (programmatic mode):**
 ```python
-from surreal.core import RLEnvironment
-from surreal.agents import GeminiPolicy
+# All backend code lives in /backend/
+from backend.core import RLEnvironment
+from backend.agents import GeminiPolicy
 
 # 1. Instantiate the Environment
 env = RLEnvironment(
@@ -136,7 +153,7 @@ env = RLEnvironment(
     initial_sources=["documents/rl_textbook.pdf", "web_search"]
 )
 
-# 2. Initialize the Agent
+# 2. Initialize the Agent (using LangGraph for orchestration)
 agent = GeminiPolicy(model="gemini-1.5-pro")
 
 # 3. The RL Loop (automated exploration)
@@ -244,11 +261,24 @@ Each node has visual cues that represent its epistemic status:
 
 ### Technical Architecture (Simplified)
 ```
-Frontend: React + D3.js (radial graph)
-Backend: FastAPI (expansion logic)
+Frontend (/frontend/): React + D3.js (radial graph)
+Backend (/backend/): FastAPI + LangGraph + uv (expansion logic & agent orchestration)
 Agent: Gemini 1.5 Pro (search synthesis)
 State: MongoDB Atlas (graph storage)
 Search: Brave API (grounding)
+```
+
+**Project Structure:**
+```
+surreal-engine/
+├── backend/          # FastAPI server, LangGraph agents, core RL logic
+│   ├── app/         # FastAPI application
+│   ├── agents/      # LangGraph agent definitions
+│   ├── core/        # RL environment, Active Inference logic
+│   └── pyproject.toml
+├── frontend/         # Interactive UI
+│   └── (React + D3.js components)
+└── README.md
 ```
 
 **The Single Core Function:**
