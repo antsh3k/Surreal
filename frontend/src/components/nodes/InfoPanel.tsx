@@ -21,7 +21,13 @@ export const InfoPanel = ({ node, position, onClose }: InfoPanelProps) => {
     nodeId: node.id,
     isExplored: node.isExplored,
     preferenceScore: node.preferenceScore,
+    hasMetadata: !!node.metadata,
     metadata: node.metadata,
+    metadataKeys: node.metadata ? Object.keys(node.metadata) : [],
+    keywordsCount: node.metadata?.keywords?.length || 0,
+    sourcesCount: node.metadata?.sources?.length || 0,
+    hasSummary: !!node.metadata?.summary,
+    hasUncertaintyScore: node.metadata?.uncertainty_score !== undefined,
     childrenCount: node.children.length
   })
 
