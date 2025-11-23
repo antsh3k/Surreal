@@ -71,10 +71,9 @@ export const InitialPrompt = ({ onSubmit }: InitialPromptProps) => {
     }
   }
 
-  // Deep vibrant blue for both border and cursor
-  const intenseBlue = '#3b82f6' // blue-500
+  // Standard intense blue - no gradient logic needed in StarBorder component anymore
+  const intenseBlue = '#2563eb' // blue-600, slightly darker/richer for better contrast on white
 
-  // Inverted colors: white background, black text
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-white px-4 selection:bg-blue-200 selection:text-black">
       <div className="w-full max-w-xl flex flex-col items-center text-center">
@@ -90,7 +89,7 @@ export const InitialPrompt = ({ onSubmit }: InitialPromptProps) => {
             as="div"
             className="w-full"
             color={intenseBlue}
-            speed="4s"
+            speed="8s"
             thickness={1} // Thin minimal border
           >
             <div className="relative w-full flex items-center bg-white rounded-[inherit] border border-gray-100 shadow-sm">
