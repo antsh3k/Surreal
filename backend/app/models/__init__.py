@@ -3,13 +3,25 @@
 from app.models.graph import GraphSnapshot, InfoPanel, MindMapState
 from app.models.node import ConceptNode, ConceptNodeBase, NodeMetadata
 from app.models.requests import (
+    AutoExpandRequest,
+    AutoExpandResponse,
     ExpandNodeRequest,
     ExpandNodeResponse,
+    GraphAnalyticsResponse,
     HealthResponse,
     InitTopicRequest,
     InitTopicResponse,
+    NodeSuggestion,
     PreferenceUpdateRequest,
     PreferenceUpdateResponse,
+    RewardHistoryEntry,
+    SuggestNextNodeRequest,
+    SuggestNextNodeResponse,
+    TrajectoryEntry,
+    TrajectoryExportFormat,
+    TrajectoryExportResponse,
+    TrajectoryListResponse,
+    TrajectoryStatsResponse,
 )
 
 __all__ = [
@@ -25,9 +37,24 @@ __all__ = [
     "InitTopicRequest",
     "ExpandNodeRequest",
     "PreferenceUpdateRequest",
+    "AutoExpandRequest",
+    "SuggestNextNodeRequest",
     # Response models
     "InitTopicResponse",
     "ExpandNodeResponse",
     "PreferenceUpdateResponse",
     "HealthResponse",
+    "AutoExpandResponse",
+    "SuggestNextNodeResponse",
+    # Trajectory models
+    "TrajectoryEntry",
+    "TrajectoryListResponse",
+    "TrajectoryExportFormat",
+    "TrajectoryExportResponse",
+    "TrajectoryStatsResponse",
+    # Helper models
+    "NodeSuggestion",
+    "RewardHistoryEntry",
+    # Analytics models
+    "GraphAnalyticsResponse",
 ]

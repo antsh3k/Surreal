@@ -15,6 +15,9 @@ class NodeMetadata(BaseModel):
     uncertainty_score: float = Field(
         1.0, ge=0.0, le=1.0, description="Uncertainty score (0.0 = certain, 1.0 = uncertain)"
     )
+    embedding: Optional[list[float]] = Field(
+        None, description="Semantic embedding vector for the concept"
+    )
 
 
 class ConceptNodeBase(BaseModel):

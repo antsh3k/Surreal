@@ -109,11 +109,17 @@ class SearchAgent:
         # Calculate uncertainty based on result quality
         uncertainty_score = self._calculate_uncertainty(search_results)
 
+        # Generate embedding for the concept
+        from app.services.embedding_service import embedding_service
+
+        embedding = await embedding_service.generate_embedding(concept)
+
         metadata = NodeMetadata(
             sources=sources,
             keywords=keywords,
             summary=summary,
             uncertainty_score=uncertainty_score,
+            embedding=embedding,
         )
 
         return metadata

@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     GEMINI_TEMPERATURE: float = 0.7
     GEMINI_MAX_TOKENS: int = 2048
 
+    # Embedding Configuration
+    GEMINI_EMBEDDING_MODEL: str = "models/embedding-001"
+    EMBEDDING_CACHE_SIZE: int = 1000
+    USE_EMBEDDING_CACHE: bool = True
+    EMBEDDING_DIMENSION: int = 768  # Gemini embedding-001 dimension
+
     # Search Configuration
     BRAVE_MAX_RESULTS: int = 5
     SEARCH_TIMEOUT_SECONDS: int = 10

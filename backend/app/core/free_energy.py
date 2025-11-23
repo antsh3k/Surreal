@@ -17,12 +17,9 @@ from app.models.graph import MindMapState
 from app.models.node import ConceptNode
 
 
-def calculate_semantic_distance(text1: str, text2: str) -> float:
+def _jaccard_distance(text1: str, text2: str) -> float:
     """
-    Calculate semantic distance between two concepts.
-
-    For MVP, we use simple character-based similarity.
-    In production, this should use embeddings (e.g., Gemini embeddings API).
+    Calculate Jaccard distance as fallback when embeddings fail.
 
     Args:
         text1: First concept text
@@ -31,7 +28,6 @@ def calculate_semantic_distance(text1: str, text2: str) -> float:
     Returns:
         Distance score (0.0 = identical, 1.0 = completely different)
     """
-    # Simple Jaccard distance based on word sets (placeholder for embeddings)
     words1 = set(text1.lower().split())
     words2 = set(text2.lower().split())
 
@@ -47,7 +43,55 @@ def calculate_semantic_distance(text1: str, text2: str) -> float:
     return distance
 
 
-def calculate_divergence(node: ConceptNode, center_concept: str) -> float:
+async def calculate_semantic_distance(
+    text1: str,
+    text2: str,
+    embedding1: Optional[list[float]] = None,
+    embedding2: Optional[list[float]] = None,
+) -> float:
+    """
+    Calculate semantic distance between two concepts using embeddings.
+
+    Falls back to Jaccard distance if embeddings are not available.
+
+    Args:
+        text1: First concept text
+        text2: Second concept text
+        embedding1: Optional pre-computed embedding for text1
+        embedding2: Optional pre-computed embedding for text2
+
+    Returns:
+        Distance score (0.0 = identical, 1.0 = completely different)
+    """
+    # Import here to avoid circular dependency
+    from app.services.embedding_service import cosine_distance, embedding_service
+
+    # Try to use embeddings first
+    try:
+        # Get or generate embeddings
+        if embedding1 is None:
+            embedding1 = await embedding_service.generate_embedding(text1)
+
+        if embedding2 is None:
+            embedding2 = await embedding_service.generate_embedding(text2)
+
+        # If both embeddings are available, use cosine distance
+        if embedding1 is not None and embedding2 is not None:
+            return cosine_distance(embedding1, embedding2)
+
+    except Exception:
+        # Fall through to Jaccard distance
+        pass
+
+    # Fallback to Jaccard distance
+    return _jaccard_distance(text1, text2)
+
+
+async def calculate_divergence(
+    node: ConceptNode,
+    center_concept: str,
+    center_embedding: Optional[list[float]] = None,
+) -> float:
     """
     Calculate divergence from self-concept (center topic).
 
@@ -56,12 +100,20 @@ def calculate_divergence(node: ConceptNode, center_concept: str) -> float:
     Args:
         node: The concept node to evaluate
         center_concept: The user's initial topic/goal
+        center_embedding: Optional pre-computed embedding for center concept
 
     Returns:
         Divergence score (0.0 = highly relevant, 1.0 = irrelevant)
     """
+    # Get embedding from node metadata if available
+    node_embedding = None
+    if node.metadata and node.metadata.embedding:
+        node_embedding = node.metadata.embedding
+
     # Use semantic distance between node concept and center concept
-    divergence = calculate_semantic_distance(node.concept, center_concept)
+    divergence = await calculate_semantic_distance(
+        node.concept, center_concept, node_embedding, center_embedding
+    )
 
     return divergence
 
@@ -109,7 +161,11 @@ def calculate_entropy(node: ConceptNode) -> float:
     return np.clip(entropy, 0.0, 1.0)
 
 
-def calculate_free_energy(node: ConceptNode, context: MindMapState) -> float:
+async def calculate_free_energy(
+    node: ConceptNode,
+    context: MindMapState,
+    center_embedding: Optional[list[float]] = None,
+) -> float:
     """
     Calculate Free Energy for a concept node.
 
@@ -122,11 +178,12 @@ def calculate_free_energy(node: ConceptNode, context: MindMapState) -> float:
     Args:
         node: The concept node to evaluate
         context: The current graph state (for center concept)
+        center_embedding: Optional pre-computed embedding for center concept
 
     Returns:
         Free Energy score (higher = more surprise)
     """
-    divergence = calculate_divergence(node, context.centerConcept)
+    divergence = await calculate_divergence(node, context.centerConcept, center_embedding)
     entropy = calculate_entropy(node)
 
     # Weighted combination
@@ -168,7 +225,11 @@ def calculate_reward(
     return float(scaled_reward)
 
 
-def calculate_expected_information_gain(node: ConceptNode, context: MindMapState) -> float:
+async def calculate_expected_information_gain(
+    node: ConceptNode,
+    context: MindMapState,
+    center_embedding: Optional[list[float]] = None,
+) -> float:
     """
     Calculate expected information gain from expanding a node.
 
@@ -178,6 +239,7 @@ def calculate_expected_information_gain(node: ConceptNode, context: MindMapState
     Args:
         node: The concept node to evaluate
         context: The current graph state
+        center_embedding: Optional pre-computed embedding for center concept
 
     Returns:
         Expected information gain (higher = more valuable to explore)
@@ -190,7 +252,7 @@ def calculate_expected_information_gain(node: ConceptNode, context: MindMapState
         return 0.1
 
     # If high uncertainty and close to center concept = high value
-    divergence = calculate_divergence(node, context.centerConcept)
+    divergence = await calculate_divergence(node, context.centerConcept, center_embedding)
 
     # Expected gain is proportional to current uncertainty
     # and inversely proportional to divergence

@@ -66,6 +66,7 @@ Make concepts diverse and cover different aspects of "{topic}".
 
             # Convert to ConceptNode objects
             nodes = []
+            concepts_texts = []
             for i, data in enumerate(concepts_data[:num_concepts]):
                 # Calculate position in radial layout (Layer 1)
                 angle = (2 * math.pi * i) / num_concepts
@@ -74,10 +75,13 @@ Make concepts diverse and cover different aspects of "{topic}".
                 x = radius * math.cos(angle)
                 y = radius * math.sin(angle)
 
+                concept_text = data.get("concept", "")
+                concepts_texts.append(concept_text)
+
                 node = ConceptNode(
                     id=f"node_{uuid.uuid4().hex[:8]}",
                     label=data.get("label", f"Concept {i+1}"),
-                    concept=data.get("concept", ""),
+                    concept=concept_text,
                     isExplored=False,  # Dashed border initially
                     preferenceScore=0.0,  # Neutral initially
                     position={"x": x, "y": y},
@@ -91,6 +95,14 @@ Make concepts diverse and cover different aspects of "{topic}".
                     ),
                 )
                 nodes.append(node)
+
+            # Generate embeddings for all concepts in batch
+            from app.services.embedding_service import embedding_service
+
+            embeddings = await embedding_service.generate_embeddings_batch(concepts_texts)
+            for node, concept_text in zip(nodes, concepts_texts):
+                if node.metadata and embeddings.get(concept_text):
+                    node.metadata.embedding = embeddings[concept_text]
 
             logger.info(f"Generated {len(nodes)} initial concepts for topic: {topic}")
             return nodes
@@ -163,6 +175,7 @@ Example format:
 
             # Convert to ConceptNode objects
             nodes = []
+            concepts_texts = []
             for i, data in enumerate(concepts_data[:num_children]):
                 # Position children in a fan pattern below parent
                 angle_offset = (i - num_children / 2) * (math.pi / 6)  # 30-degree spacing
@@ -171,10 +184,13 @@ Example format:
                 x = parent_x + child_radius * math.cos(angle_offset)
                 y = parent_y + child_radius * math.sin(angle_offset)
 
+                concept_text = data.get("concept", "")
+                concepts_texts.append(concept_text)
+
                 node = ConceptNode(
                     id=f"node_{uuid.uuid4().hex[:8]}",
                     label=data.get("label", f"Child {i+1}"),
-                    concept=data.get("concept", ""),
+                    concept=concept_text,
                     isExplored=False,  # Dashed border initially
                     preferenceScore=0.0,  # Neutral initially
                     position={"x": x, "y": y},
@@ -188,6 +204,14 @@ Example format:
                     ),
                 )
                 nodes.append(node)
+
+            # Generate embeddings for all concepts in batch
+            from app.services.embedding_service import embedding_service
+
+            embeddings = await embedding_service.generate_embeddings_batch(concepts_texts)
+            for node, concept_text in zip(nodes, concepts_texts):
+                if node.metadata and embeddings.get(concept_text):
+                    node.metadata.embedding = embeddings[concept_text]
 
             logger.info(
                 f"Generated {len(nodes)} child concepts for parent: {parent.label}"

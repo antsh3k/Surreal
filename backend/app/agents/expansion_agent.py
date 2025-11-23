@@ -61,7 +61,7 @@ class ExpansionAgent:
     async def _calculate_initial_uncertainty(self, state: ExpansionState) -> ExpansionState:
         """Step 1: Calculate free energy before expansion."""
         try:
-            free_energy = calculate_free_energy(state["node"], state["context"])
+            free_energy = await calculate_free_energy(state["node"], state["context"])
             state["uncertainty_before"] = free_energy
             logger.debug(
                 f"Initial uncertainty for {state['node'].label}: {free_energy:.3f}"
