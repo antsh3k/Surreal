@@ -7,8 +7,12 @@ from fastapi import APIRouter, HTTPException, status
 from app.models import (
     AutoExpandRequest,
     AutoExpandResponse,
+    CheckMediaStatusRequest,
+    CheckMediaStatusResponse,
     ExpandNodeRequest,
     ExpandNodeResponse,
+    GenerateMediaRequest,
+    GenerateMediaResponse,
     GraphAnalyticsResponse,
     HealthResponse,
     InitTopicRequest,
@@ -24,7 +28,7 @@ from app.models import (
     TrajectoryListResponse,
     TrajectoryStatsResponse,
 )
-from app.services import GraphService
+from app.services import GraphService, minimax_service
 from app.utils import log_api_call, logger
 
 # Create API router
@@ -745,3 +749,245 @@ async def export_graph(request: dict) -> dict:
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
         detail="Graph export not yet implemented.",
     )
+
+
+# Multimedia Generation Endpoints (Phase 11.8 - Minimax Integration)
+@router.post("/generate-media", response_model=GenerateMediaResponse, status_code=status.HTTP_200_OK)
+async def generate_media(request: GenerateMediaRequest) -> GenerateMediaResponse:
+    """
+    Generate multimedia content (image or video) for a concept node.
+
+    **On-demand only**: This endpoint is called when the user explicitly requests
+    media generation for a node (e.g., clicks on an explored node to generate content).
+
+    **Async behavior**:
+    - If `wait_for_completion=False` (default): Returns task_id immediately for polling
+    - If `wait_for_completion=True`: Waits for generation to complete (may take 4-10 minutes for video)
+
+    **Media types**:
+    - `image`: Generates a visual representation of the concept (1-2 minutes)
+    - `video`: Generates a short explainer video (4-10 minutes depending on duration)
+
+    **Time estimates**:
+    - Image generation: ~1-2 minutes
+    - Video (6s): ~4-5 minutes
+    - Video (10s): ~8-9 minutes
+    """
+    log_api_call("/api/generate-media", node_id=request.node_id, media_type=request.media_type)
+
+    try:
+        # Get the node from the graph (in a real app, you'd fetch this from storage)
+        # For MVP, we'll use the prompt_override if provided, otherwise use a placeholder
+        prompt = request.prompt_override or f"Visual representation of: {request.node_id}"
+
+        # Log generation request
+        logger.info(
+            f"Generating {request.media_type} for node {request.node_id} "
+            f"(wait_for_completion={request.wait_for_completion})"
+        )
+
+        if request.media_type == "image":
+            if request.wait_for_completion:
+                # Generate and wait for completion
+                media_url = await minimax_service.generate_and_wait_image(
+                    prompt=prompt,
+                    aspect_ratio=request.aspect_ratio,
+                )
+
+                if media_url:
+                    return GenerateMediaResponse(
+                        node_id=request.node_id,
+                        media_type="image",
+                        status="completed",
+                        task_id=None,
+                        media_url=media_url,
+                        error=None,
+                        elapsed_time=None,  # Calculated in service
+                        updated_node=None,  # Frontend will update node metadata
+                    )
+                else:
+                    return GenerateMediaResponse(
+                        node_id=request.node_id,
+                        media_type="image",
+                        status="failed",
+                        task_id=None,
+                        media_url=None,
+                        error="Image generation failed",
+                        elapsed_time=None,
+                        updated_node=None,
+                    )
+            else:
+                # Start async generation
+                task_result = await minimax_service.generate_image(
+                    prompt=prompt,
+                    aspect_ratio=request.aspect_ratio,
+                )
+
+                if task_result and "task_id" in task_result:
+                    return GenerateMediaResponse(
+                        node_id=request.node_id,
+                        media_type="image",
+                        status="pending",
+                        task_id=task_result["task_id"],
+                        media_url=None,
+                        error=None,
+                        elapsed_time=None,
+                        updated_node=None,
+                    )
+                else:
+                    return GenerateMediaResponse(
+                        node_id=request.node_id,
+                        media_type="image",
+                        status="failed",
+                        task_id=None,
+                        media_url=None,
+                        error="Failed to start image generation",
+                        elapsed_time=None,
+                        updated_node=None,
+                    )
+
+        elif request.media_type == "video":
+            if request.wait_for_completion:
+                # Generate and wait for completion
+                media_url = await minimax_service.generate_and_wait_video(
+                    prompt=prompt,
+                    duration=request.duration,
+                    resolution=request.resolution,
+                )
+
+                if media_url:
+                    return GenerateMediaResponse(
+                        node_id=request.node_id,
+                        media_type="video",
+                        status="completed",
+                        task_id=None,
+                        media_url=media_url,
+                        error=None,
+                        elapsed_time=None,  # Calculated in service
+                        updated_node=None,
+                    )
+                else:
+                    return GenerateMediaResponse(
+                        node_id=request.node_id,
+                        media_type="video",
+                        status="failed",
+                        task_id=None,
+                        media_url=None,
+                        error="Video generation failed",
+                        elapsed_time=None,
+                        updated_node=None,
+                    )
+            else:
+                # Start async generation
+                task_result = await minimax_service.generate_video(
+                    prompt=prompt,
+                    duration=request.duration,
+                    resolution=request.resolution,
+                )
+
+                if task_result and "task_id" in task_result:
+                    return GenerateMediaResponse(
+                        node_id=request.node_id,
+                        media_type="video",
+                        status="pending",
+                        task_id=task_result["task_id"],
+                        media_url=None,
+                        error=None,
+                        elapsed_time=None,
+                        updated_node=None,
+                    )
+                else:
+                    return GenerateMediaResponse(
+                        node_id=request.node_id,
+                        media_type="video",
+                        status="failed",
+                        task_id=None,
+                        media_url=None,
+                        error="Failed to start video generation",
+                        elapsed_time=None,
+                        updated_node=None,
+                    )
+
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid media_type: {request.media_type}",
+            )
+
+    except Exception as e:
+        logger.error(f"Error generating media: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate media: {str(e)}",
+        )
+
+
+@router.post("/media-status", response_model=CheckMediaStatusResponse, status_code=status.HTTP_200_OK)
+async def check_media_status(request: CheckMediaStatusRequest) -> CheckMediaStatusResponse:
+    """
+    Check the status of an ongoing media generation task.
+
+    **Polling endpoint**: Used to check the progress of async media generation.
+
+    **Status values**:
+    - `pending`: Task is queued
+    - `generating`: Generation in progress
+    - `completed`: Media is ready, URL available
+    - `failed`: Generation failed, error message available
+
+    **Usage pattern**:
+    1. Call /generate-media with wait_for_completion=False
+    2. Get task_id from response
+    3. Poll /media-status every 10-30 seconds until status is completed or failed
+    4. Update node metadata with media_url when completed
+    """
+    log_api_call("/api/media-status", task_id=request.task_id, media_type=request.media_type)
+
+    try:
+        # Check task status
+        status_result = await minimax_service.check_task_status(
+            task_id=request.task_id,
+            media_type=request.media_type,
+        )
+
+        if not status_result:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Task {request.task_id} not found or status check failed",
+            )
+
+        task_status = status_result.get("status", "unknown")
+        media_url = status_result.get("url")
+        error_msg = status_result.get("error")
+
+        # Map Minimax status to our status format
+        if task_status in ["queued", "waiting"]:
+            status_mapped = "pending"
+        elif task_status in ["generating", "processing"]:
+            status_mapped = "generating"
+        elif task_status == "completed":
+            status_mapped = "completed"
+        elif task_status == "failed":
+            status_mapped = "failed"
+        else:
+            status_mapped = "pending"
+
+        return CheckMediaStatusResponse(
+            task_id=request.task_id,
+            node_id=request.node_id,
+            media_type=request.media_type,
+            status=status_mapped,
+            media_url=media_url,
+            progress=None,  # Minimax doesn't provide progress percentage
+            error=error_msg,
+            updated_node=None,  # Frontend will update node metadata
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error checking media status: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to check media status: {str(e)}",
+        )

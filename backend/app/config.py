@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str
     BRAVE_API_KEY: str
     MONGODB_URI: str
+    MINIMAX_API_KEY: str
 
     # Application Settings
     ENVIRONMENT: Literal["development", "staging", "production"] = "development"
@@ -42,6 +43,17 @@ class Settings(BaseSettings):
     # Search Configuration
     BRAVE_MAX_RESULTS: int = 5
     SEARCH_TIMEOUT_SECONDS: int = 10
+
+    # Minimax API Configuration
+    MINIMAX_API_BASE_URL: str = "https://api.minimax.io/v1"
+    MINIMAX_IMAGE_MODEL: str = "image-01"
+    MINIMAX_VIDEO_MODEL: str = "MiniMax-Hailuo-2.3"
+    MINIMAX_VIDEO_DURATION: int = 6  # seconds (6 or 10)
+    MINIMAX_VIDEO_RESOLUTION: Literal["768P", "1080P"] = "768P"
+    MINIMAX_MAX_PROMPT_LENGTH_IMAGE: int = 1500  # characters
+    MINIMAX_MAX_PROMPT_LENGTH_VIDEO: int = 2000  # characters
+    MINIMAX_POLL_INTERVAL: int = 10  # seconds (for checking task status)
+    MINIMAX_MAX_POLL_ATTEMPTS: int = 60  # max attempts (10 min for video)
 
     # Preference Learning Score Deltas
     SCORE_DELTA_HOVER: float = 0.02

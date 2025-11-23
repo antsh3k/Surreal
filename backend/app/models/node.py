@@ -18,6 +18,18 @@ class NodeMetadata(BaseModel):
     embedding: Optional[list[float]] = Field(
         None, description="Semantic embedding vector for the concept"
     )
+    image_url: Optional[str] = Field(
+        None, description="URL of generated image for this concept"
+    )
+    video_url: Optional[str] = Field(
+        None, description="URL of generated video for this concept"
+    )
+    image_task_id: Optional[str] = Field(
+        None, description="Task ID for async image generation (if in progress)"
+    )
+    video_task_id: Optional[str] = Field(
+        None, description="Task ID for async video generation (for polling status)"
+    )
 
 
 class ConceptNodeBase(BaseModel):

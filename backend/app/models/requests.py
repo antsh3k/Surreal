@@ -1,6 +1,6 @@
 """Pydantic models for API requests and responses."""
 
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -496,5 +496,150 @@ class GraphAnalyticsResponse(BaseModel):
                 "surprise_reduction_trend": [],
                 "center_concept": "Active Inference",
                 "session_id": None,
+            }
+        }
+
+
+# Multimedia Generation API Models (Phase 11.8 - Minimax Integration)
+class GenerateMediaRequest(BaseModel):
+    """Request to generate multimedia content (image or video) for a concept node."""
+
+    node_id: str = Field(..., description="ID of the node to generate media for")
+    media_type: Literal["image", "video"] = Field(..., description="Type of media to generate")
+    prompt_override: Optional[str] = Field(
+        None,
+        description="Optional custom prompt (if not provided, uses node's concept text)",
+    )
+
+    # Image-specific parameters
+    aspect_ratio: str = Field("1:1", description="Image aspect ratio (e.g., '1:1', '16:9', '9:16')")
+
+    # Video-specific parameters
+    duration: int = Field(6, ge=6, le=10, description="Video duration in seconds (6 or 10)")
+    resolution: Literal["768P", "1080P"] = Field("768P", description="Video resolution")
+
+    # Generation options
+    wait_for_completion: bool = Field(
+        False,
+        description="If True, waits for generation to complete before returning. If False, returns task_id immediately",
+    )
+
+    class Config:
+        """Pydantic configuration."""
+
+        json_schema_extra = {
+            "example": {
+                "node_id": "node_1",
+                "media_type": "video",
+                "prompt_override": None,
+                "aspect_ratio": "16:9",
+                "duration": 6,
+                "resolution": "768P",
+                "wait_for_completion": False,
+            }
+        }
+
+
+class GenerateMediaResponse(BaseModel):
+    """Response from media generation request."""
+
+    node_id: str = Field(..., description="ID of the node")
+    media_type: Literal["image", "video"] = Field(..., description="Type of media generated")
+    status: Literal["pending", "generating", "completed", "failed", "timeout"] = Field(
+        ..., description="Current status of media generation"
+    )
+
+    # Task ID for async polling
+    task_id: Optional[str] = Field(None, description="Task ID for checking status (if async)")
+
+    # Media URLs (if completed)
+    media_url: Optional[str] = Field(None, description="URL of generated media (if completed)")
+
+    # Error information
+    error: Optional[str] = Field(None, description="Error message (if failed)")
+
+    # Timing information
+    elapsed_time: Optional[float] = Field(None, description="Time elapsed in seconds (if completed or failed)")
+
+    # Updated node with media URL in metadata
+    updated_node: Optional[ConceptNode] = Field(
+        None, description="Updated node with media URL in metadata (if completed)"
+    )
+
+    class Config:
+        """Pydantic configuration."""
+
+        json_schema_extra = {
+            "example": {
+                "node_id": "node_1",
+                "media_type": "video",
+                "status": "pending",
+                "task_id": "task_abc123",
+                "media_url": None,
+                "error": None,
+                "elapsed_time": None,
+                "updated_node": None,
+            }
+        }
+
+
+class CheckMediaStatusRequest(BaseModel):
+    """Request to check the status of a media generation task."""
+
+    task_id: str = Field(..., description="Task ID from GenerateMediaResponse")
+    media_type: Literal["image", "video"] = Field(..., description="Type of media being generated")
+    node_id: str = Field(..., description="ID of the node")
+
+    class Config:
+        """Pydantic configuration."""
+
+        json_schema_extra = {
+            "example": {
+                "task_id": "task_abc123",
+                "media_type": "video",
+                "node_id": "node_1",
+            }
+        }
+
+
+class CheckMediaStatusResponse(BaseModel):
+    """Response with current status of media generation task."""
+
+    task_id: str = Field(..., description="Task ID")
+    node_id: str = Field(..., description="ID of the node")
+    media_type: Literal["image", "video"] = Field(..., description="Type of media")
+    status: Literal["pending", "queued", "generating", "completed", "failed"] = Field(
+        ..., description="Current status"
+    )
+
+    # Media URL (if completed)
+    media_url: Optional[str] = Field(None, description="URL of generated media (if completed)")
+
+    # Progress information
+    progress: Optional[int] = Field(
+        None, ge=0, le=100, description="Progress percentage (0-100, if available)"
+    )
+
+    # Error information
+    error: Optional[str] = Field(None, description="Error message (if failed)")
+
+    # Updated node (if completed)
+    updated_node: Optional[ConceptNode] = Field(
+        None, description="Updated node with media URL in metadata (if completed)"
+    )
+
+    class Config:
+        """Pydantic configuration."""
+
+        json_schema_extra = {
+            "example": {
+                "task_id": "task_abc123",
+                "node_id": "node_1",
+                "media_type": "video",
+                "status": "generating",
+                "media_url": None,
+                "progress": 45,
+                "error": None,
+                "updated_node": None,
             }
         }
