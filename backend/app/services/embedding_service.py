@@ -4,8 +4,7 @@ from functools import lru_cache
 from typing import Optional
 
 import numpy as np
-from google import genai
-from google.genai.types import EmbedContentConfig
+import google.generativeai as genai
 
 from app.config import settings
 from app.utils import logger
@@ -16,7 +15,8 @@ class EmbeddingService:
 
     def __init__(self) -> None:
         """Initialize the embedding service with Gemini client."""
-        self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        genai.configure(api_key=settings.GEMINI_API_KEY)
+        self.client = genai
         self.model = settings.GEMINI_EMBEDDING_MODEL
         self.dimension = settings.EMBEDDING_DIMENSION
         self.use_cache = settings.USE_EMBEDDING_CACHE
@@ -43,16 +43,14 @@ class EmbeddingService:
 
         try:
             # Generate embedding using Gemini
-            result = self.client.models.embed_content(
+            result = genai.embed_content(
                 model=self.model,
-                contents=text,
-                config=EmbedContentConfig(
-                    task_type="SEMANTIC_SIMILARITY",
-                ),
+                content=text,
+                task_type="semantic_similarity",
             )
 
             # Extract embedding vector
-            embedding = result.embeddings[0].values
+            embedding = result['embedding']
 
             # Cache it
             if self.use_cache and len(self._cache) < settings.EMBEDDING_CACHE_SIZE:
@@ -93,23 +91,23 @@ class EmbeddingService:
             return results
 
         try:
-            # Generate embeddings in batch
-            batch_result = self.client.models.embed_content(
-                model=self.model,
-                contents=uncached_texts,
-                config=EmbedContentConfig(
-                    task_type="SEMANTIC_SIMILARITY",
-                ),
-            )
+            # Generate embeddings individually (google.generativeai doesn't support batch well)
+            for text in uncached_texts:
+                try:
+                    result = genai.embed_content(
+                        model=self.model,
+                        content=text,
+                        task_type="semantic_similarity",
+                    )
+                    embedding = result['embedding']
+                    results[text] = embedding
 
-            # Process results
-            for text, embedding_data in zip(uncached_texts, batch_result.embeddings):
-                embedding = embedding_data.values
-                results[text] = embedding
-
-                # Cache it
-                if self.use_cache and len(self._cache) < settings.EMBEDDING_CACHE_SIZE:
-                    self._cache[text] = embedding
+                    # Cache it
+                    if self.use_cache and len(self._cache) < settings.EMBEDDING_CACHE_SIZE:
+                        self._cache[text] = embedding
+                except Exception as text_error:
+                    logger.error(f"Failed to embed text '{text[:50]}...': {str(text_error)}")
+                    results[text] = None
 
             logger.info(f"Generated {len(uncached_texts)} embeddings in batch")
 

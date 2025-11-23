@@ -5,8 +5,12 @@ from app.models.node import ConceptNode, ConceptNodeBase, NodeMetadata
 from app.models.requests import (
     AutoExpandRequest,
     AutoExpandResponse,
+    CheckMediaStatusRequest,
+    CheckMediaStatusResponse,
     ExpandNodeRequest,
     ExpandNodeResponse,
+    GenerateMediaRequest,
+    GenerateMediaResponse,
     GraphAnalyticsResponse,
     HealthResponse,
     InitTopicRequest,
@@ -39,6 +43,8 @@ __all__ = [
     "PreferenceUpdateRequest",
     "AutoExpandRequest",
     "SuggestNextNodeRequest",
+    "GenerateMediaRequest",
+    "CheckMediaStatusRequest",
     # Response models
     "InitTopicResponse",
     "ExpandNodeResponse",
@@ -46,6 +52,8 @@ __all__ = [
     "HealthResponse",
     "AutoExpandResponse",
     "SuggestNextNodeResponse",
+    "GenerateMediaResponse",
+    "CheckMediaStatusResponse",
     # Trajectory models
     "TrajectoryEntry",
     "TrajectoryListResponse",
