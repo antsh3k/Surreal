@@ -1,0 +1,47 @@
+/* Ensure Tldraw component fills container */
+.mindcanvas-container > div:first-child {
+  width: 100% !important;
+  height: 100% !important;
+  position: relative !important;
+}
+
+/* Hide default tldraw UI elements - we want a clean canvas for custom nodes */
+.mindcanvas-container .tlui-menu-zone,
+.mindcanvas-container .tlui-toolbar,
+.mindcanvas-container .tlui-help-menu,
+.mindcanvas-container .tlui-navigation-zone,
+.mindcanvas-container .tlui-topbar,
+.mindcanvas-container .tlui-style-panel,
+.mindcanvas-container .tlui-page-menu {
+  display: none !important;
+}
+
+/* Keep the canvas visible and full screen */
+.mindcanvas-container .tl-editor {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Ensure canvas is visible */
+.mindcanvas-container .tl-canvas {
+  position: relative !important;
+  z-index: 1 !important;
+  background-color: #fafafa !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Make sure grid is visible if it exists */
+.mindcanvas-container .tl-grid {
+  display: block !important;
+  opacity: 0.15 !important;
+}
+
+/* Ensure shapes are visible */
+.mindcanvas-container .tl-shape {
+  pointer-events: auto !important;
+  visibility: visible !important;
+}
+
