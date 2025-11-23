@@ -68,14 +68,10 @@ export default function App() {
 
   return (
     <div className="relative w-full h-screen">
-      <MindCanvas>
-        {/* Canvas Click Handler */}
-        <div 
-          className="absolute inset-0 pointer-events-auto z-40"
-          onClick={handleCanvasClick}
-        />
-
-        {/* Render All Concept Nodes */}
+      {/* 1. The Infinite Canvas Layer */}
+      <MindCanvas onBackgroundClick={handleCanvasClick}>
+        
+        {/* Nodes live INSIDE MindCanvas to move with the camera */}
         {nodes.map(node => (
           <ConceptNode
             key={node.id}
@@ -86,19 +82,15 @@ export default function App() {
           />
         ))}
 
-        {/* Loading Node for Generation */}
-        {isGenerating && loadingNodeId && (
+        {/* Loading Node for INITIAL generation only (when loadingNodeId is 'center') */}
+        {isGenerating && loadingNodeId === 'center' && (
           <LoadingNode 
-            position={
-              loadingNodeId === 'center' 
-                ? { x: 600, y: 400 }
-                : nodes.find(n => n.id === loadingNodeId)?.position || { x: 600, y: 400 }
-            }
-            label={loadingNodeId === 'center' ? 'Creating mental map...' : 'Expanding concept...'}
+            position={{ x: 600, y: 400 }}
+            label="Creating mental map..."
           />
         )}
 
-        {/* Info Panel */}
+        {/* InfoPanel currently lives in world space (scales with zoom) */}
         {infoPanel && (
           <InfoPanel
             node={nodes.find(n => n.id === infoPanel.nodeId)!}
@@ -106,17 +98,17 @@ export default function App() {
             onClose={closeInfoPanel}
           />
         )}
-
-        {/* Status Bar */}
-        <StatusBar 
-          nodeCount={nodes.length}
-          isGenerating={isGenerating}
-          centerConcept={centerConcept}
-        />
-
-        {/* React Bits Test (remove in production) */}
-        {import.meta.env.DEV && <ReactBitsTest />}
       </MindCanvas>
+
+      {/* 2. The Screen UI Layer (Fixed position, outside MindCanvas) */}
+      <StatusBar 
+        nodeCount={nodes.length}
+        isGenerating={isGenerating}
+        centerConcept={centerConcept}
+      />
+
+      {/* Debug Tools */}
+      {import.meta.env.DEV && <ReactBitsTest />}
     </div>
   )
 }

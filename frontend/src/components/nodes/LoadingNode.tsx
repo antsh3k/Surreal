@@ -32,27 +32,22 @@ export const LoadingNode = ({
       }}
     >
       <div className="relative">
-        {/* Multiple Ripple Effects with Staggered Animation */}
-        <div className="loading-ripple" />
-        <div className="loading-ripple-2" />
-        <div className="loading-ripple-3" />
-        
-        {/* Central Loading Content */}
-        <div className="relative z-10 px-4 py-2 rounded-lg bg-white border-2 border-blue-400 min-w-[140px]">
-          {/* Pulsing Background */}
-          <div className="absolute inset-0 bg-blue-50 rounded-lg opacity-50 animate-pulse" />
+        {/* Clean White Box - No Ripples, but Blue Border */}
+        <div className="relative z-10 px-4 py-2 rounded-lg bg-white border-2 border-blue-400 shadow-md min-w-[140px]">
           
-          {/* React Bits Blur Effect */}
+          {/* Clean Minimalist Content */}
           <div className="relative z-10 text-center">
-            <BlurText text={label} />
+            <div className="mb-1">
+              <BlurText text={label} className="text-sm font-medium text-blue-600" />
+            </div>
             
-            {/* Loading Dots Animation */}
-            <div className="flex justify-center space-x-1 mt-1">
+            {/* Simple Blue Dots Animation */}
+            <div className="flex justify-center space-x-1">
               {[0, 1, 2].map((dot) => (
                 <div
                   key={dot}
                   className={`
-                    w-1.5 h-1.5 bg-blue-500 rounded-full transition-opacity duration-300
+                    w-1 h-1 bg-blue-500 rounded-full transition-opacity duration-300
                     ${animationPhase === dot ? 'opacity-100' : 'opacity-30'}
                   `}
                 />
@@ -64,4 +59,3 @@ export const LoadingNode = ({
     </div>
   )
 }
-

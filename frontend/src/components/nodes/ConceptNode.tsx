@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import StarBorder from '../ui/StarBorder'
 import { ShinyText } from '../ui/ShinyText'
+import { BlurText } from '../ui/BlurText'
 import type { ConceptNode as ConceptNodeType } from '../../types'
 
 interface ConceptNodeProps {
@@ -19,12 +20,22 @@ export const ConceptNode = ({
   className = ''
 }: ConceptNodeProps) => {
   const [isHovered, setIsHovered] = useState(false)
+  const [animationPhase, setAnimationPhase] = useState(0)
+
+  useEffect(() => {
+    if (!isLoading) return
+    const interval = setInterval(() => {
+      setAnimationPhase(prev => (prev + 1) % 4)
+    }, 300)
+    return () => clearInterval(interval)
+  }, [isLoading])
   
   // Determine node styling based on state
   const getNodeClasses = () => {
     const baseClasses = `concept-node ${className}`
     
-    if (isLoading) return `${baseClasses} opacity-75`
+    // Blue border for loading state
+    if (isLoading) return `${baseClasses} concept-node-explored border-blue-400`
     
     if (node.isExplored) {
       if (node.preferenceScore > 0.3) {
@@ -60,6 +71,52 @@ export const ConceptNode = ({
     onHover?.(node.id, false)
   }
 
+  const renderContent = () => (
+    <div className="relative z-10 min-w-[120px] text-center">
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center py-1">
+          <BlurText text="Thinking" className="text-sm font-medium text-blue-600" />
+          <div className="flex justify-center space-x-1 mt-1">
+            {[0, 1, 2].map((dot) => (
+              <div
+                key={dot}
+                className={`
+                  w-1 h-1 bg-blue-500 rounded-full transition-opacity duration-300
+                  ${animationPhase === dot ? 'opacity-100' : 'opacity-30'}
+                `}
+              />
+            ))}
+          </div>
+        </div>
+      ) : (
+        <>
+          {showShinyText ? (
+            <ShinyText text={node.label} />
+          ) : (
+            <span className="text-sm font-medium text-gray-900">
+              {node.label.length > 20 ? `${node.label.slice(0, 17)}...` : node.label}
+            </span>
+          )}
+          
+          {/* State Indicators */}
+          <div className="flex items-center justify-center mt-1 space-x-1">
+            {!node.isExplored && (
+              <span className="text-xs text-gray-500">Click to explore</span>
+            )}
+            
+            {showImportanceIndicator && node.isExplored && (
+              <span className="text-xs text-green-600">✨</span>
+            )}
+            
+            {node.preferenceScore < -0.3 && (
+              <span className="text-xs text-orange-600">?</span>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+
   return (
     <div 
       className="absolute z-10"
@@ -89,72 +146,24 @@ export const ConceptNode = ({
               disabled:cursor-not-allowed
             `}
           >
-            {/* Node Content */}
-            <div className="relative z-10 min-w-[120px] text-center">
-              {showShinyText ? (
-                <ShinyText text={node.label} />
-              ) : (
-                <span className="text-sm font-medium text-gray-900">
-                  {node.label.length > 20 ? `${node.label.slice(0, 17)}...` : node.label}
-                </span>
-              )}
-              
-              {/* State Indicators */}
-              <div className="flex items-center justify-center mt-1 space-x-1">
-                {!node.isExplored && (
-                  <span className="text-xs text-gray-500">Click to explore</span>
-                )}
-                
-                {showImportanceIndicator && node.isExplored && (
-                  <span className="text-xs text-green-600">✨</span>
-                )}
-                
-                {node.preferenceScore < -0.3 && (
-                  <span className="text-xs text-orange-600">?</span>
-                )}
-              </div>
-            </div>
+            {renderContent()}
           </StarBorder>
         ) : (
           <button
-          onClick={handleClick}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
-          disabled={isLoading}
-          className={`
-            ${getNodeClasses()}
-            ${isHovered && !isLoading ? 'scale-105' : 'scale-100'}
-            ${isLoading ? 'cursor-wait' : 'cursor-pointer'}
-            hover:shadow-md
-            focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
-            disabled:cursor-not-allowed
-          `}
-        >
-          {/* Node Content */}
-          <div className="relative z-10 min-w-[120px] text-center">
-            {showShinyText ? (
-              <ShinyText text={node.label} />
-            ) : (
-              <span className="text-sm font-medium text-gray-900">
-                {node.label.length > 20 ? `${node.label.slice(0, 17)}...` : node.label}
-              </span>
-            )}
-            
-            {/* State Indicators */}
-            <div className="flex items-center justify-center mt-1 space-x-1">
-              {!node.isExplored && (
-                <span className="text-xs text-gray-500">Click to explore</span>
-              )}
-              
-              {showImportanceIndicator && node.isExplored && (
-                <span className="text-xs text-green-600">✨</span>
-              )}
-              
-              {node.preferenceScore < -0.3 && (
-                <span className="text-xs text-orange-600">?</span>
-              )}
-            </div>
-          </div>
+            onClick={handleClick}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+            disabled={isLoading}
+            className={`
+              ${getNodeClasses()}
+              ${isHovered && !isLoading ? 'scale-105' : 'scale-100'}
+              ${isLoading ? 'cursor-wait' : 'cursor-pointer'}
+              hover:shadow-md
+              focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
+              disabled:cursor-not-allowed
+            `}
+          >
+            {renderContent()}
           </button>
         )}
 
@@ -168,4 +177,3 @@ export const ConceptNode = ({
     </div>
   )
 }
-
