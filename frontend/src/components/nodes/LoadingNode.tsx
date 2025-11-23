@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BlurText } from '../ui/BlurText'
+import { ShinyText } from '../ui/ShinyText'
 
 interface LoadingNodeProps {
   position: { x: number; y: number }
@@ -24,21 +24,21 @@ export const LoadingNode = ({
 
   return (
     <div 
-      className="absolute z-20"
+      className="absolute z-[15]"
       style={{ 
-        left: position.x - 70,
-        top: position.y - 20,
+        left: position.x - 120,
+        top: position.y - 25,
         transform: 'translate(0, 0)'
       }}
     >
       <div className="relative">
         {/* Clean White Box - No Ripples, but Blue Border */}
-        <div className="relative z-10 px-4 py-2 rounded-lg bg-white border-2 border-blue-400 shadow-md min-w-[140px]">
+        <div className="relative z-10 px-6 py-3 rounded-xl bg-white border-2 border-blue-400 shadow-md min-w-[240px]">
           
           {/* Clean Minimalist Content */}
           <div className="relative z-10 text-center">
             <div className="mb-1">
-              <BlurText text={label} className="text-sm font-medium text-blue-600" />
+              <ShinyText text={label} className="text-sm font-medium text-blue-600" />
             </div>
             
             {/* Simple Blue Dots Animation */}

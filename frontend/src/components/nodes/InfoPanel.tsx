@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { ConceptNode } from '../../types'
-import { generateConceptDetails } from '../../utils/conceptGeneration'
 
 interface InfoPanelProps {
   node: ConceptNode
@@ -11,32 +10,67 @@ interface InfoPanelProps {
 export const InfoPanel = ({ node, position, onClose }: InfoPanelProps) => {
   const [details, setDetails] = useState(node.metadata)
   const [isLoading, setIsLoading] = useState(false)
+  const panelRef = useRef<HTMLDivElement>(null)
+  
+  console.log(`📋 InfoPanel opened for node "${node.label}"`, {
+    nodeId: node.id,
+    isExplored: node.isExplored,
+    preferenceScore: node.preferenceScore,
+    metadata: node.metadata,
+    childrenCount: node.children.length
+  })
+
+  // Handle ESC key to close
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
+
+  // Handle click outside to close
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(event.target as Node)) {
+        onClose()
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [onClose])
 
   useEffect(() => {
-    // Load detailed information if not already available
-    if (!details?.summary) {
-      setIsLoading(true)
-      generateConceptDetails(node.concept)
-        .then(newDetails => {
-          setDetails(newDetails)
-          setIsLoading(false)
-        })
-        .catch(error => {
-          console.error('Failed to load concept details:', error)
-          setIsLoading(false)
-        })
-    }
-  }, [node.concept, details])
+    // Use backend metadata directly instead of mock generation
+    console.log(`📋 InfoPanel using backend metadata for "${node.label}"`, {
+      hasBackendSummary: !!node.metadata?.summary,
+      backendKeywords: node.metadata?.keywords || [],
+      backendSources: node.metadata?.sources || []
+    })
+    
+    // Always use the backend metadata directly
+    setDetails(node.metadata || {
+      summary: `${node.concept} - AI-generated concept`,
+      keywords: [],
+      sources: []
+    })
+    setIsLoading(false)
+  }, [node.metadata, node.concept])
 
-  // Adjust panel position to stay within viewport
+  // Adjust panel position to stay within viewport (now in screen space)
   const adjustedPosition = {
-    x: Math.min(position.x, window.innerWidth - 320), // Panel width = 320px
-    y: Math.max(60, Math.min(position.y, window.innerHeight - 400)) // Panel height ≈ 400px
+    x: Math.min(Math.max(16, position.x), window.innerWidth - 336), // Panel width = 320px + 16px margin
+    y: Math.max(16, Math.min(position.y, window.innerHeight - 416)) // Panel height ≈ 400px + 16px margin
   }
 
   return (
     <div
-      className="absolute z-50 bg-white border-2 border-gray-200 rounded-xl shadow-xl max-w-sm animate-[fadeIn_0.2s_ease-out]"
+      ref={panelRef}
+      className="fixed z-50 bg-white border-2 border-gray-200 rounded-xl shadow-xl max-w-sm animate-[fadeIn_0.2s_ease-out]"
       style={{
         left: adjustedPosition.x,
         top: adjustedPosition.y,
@@ -80,18 +114,15 @@ export const InfoPanel = ({ node, position, onClose }: InfoPanelProps) => {
           </span>
         </div>
 
+        {/* Backend Data Source Indicator */}
+        <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">
+          📡 Backend AI Data • Node ID: {node.id.substring(0, 8)}...
+        </div>
+
         {/* Summary */}
-        {isLoading ? (
-          <div className="space-y-2">
-            <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
-            <div className="h-4 bg-gray-200 rounded animate-pulse w-3/4"></div>
-            <div className="h-4 bg-gray-200 rounded animate-pulse w-1/2"></div>
-          </div>
-        ) : (
-          <div className="text-sm text-gray-700 leading-relaxed">
-            {details?.summary || 'No summary available.'}
-          </div>
-        )}
+        <div className="text-sm text-gray-700 leading-relaxed">
+          {details?.summary || `${node.concept} - AI-generated concept from backend`}
+        </div>
 
         {/* Keywords */}
         {details?.keywords && details.keywords.length > 0 && (
@@ -110,15 +141,36 @@ export const InfoPanel = ({ node, position, onClose }: InfoPanelProps) => {
           </div>
         )}
 
+        {/* Backend Sources */}
+        {details?.sources && details.sources.length > 0 && (
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium text-gray-900">Sources:</h4>
+            <div className="space-y-1">
+              {details.sources.slice(0, 3).map((source, index) => (
+                <div key={index} className="text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded">
+                  📄 {source}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Relationships */}
         {node.children.length > 0 && (
           <div className="space-y-2">
             <h4 className="text-sm font-medium text-gray-900">Explored Aspects:</h4>
             <div className="text-sm text-gray-600">
-              {node.children.length} sub-concept{node.children.length !== 1 ? 's' : ''} discovered
+              {node.children.length} sub-concept{node.children.length !== 1 ? 's' : ''} discovered via backend AI
             </div>
           </div>
         )}
+
+        {/* Backend Metadata */}
+        <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
+          <div>🤖 Generated: {node.createdAt.toLocaleDateString()} {node.createdAt.toLocaleTimeString()}</div>
+          <div>🎯 Parent: {node.parentId ? node.parentId.substring(0, 8) + '...' : 'Root concept'}</div>
+          <div>📊 Score: {node.preferenceScore.toFixed(3)}</div>
+        </div>
 
         {/* Actions */}
         <div className="flex space-x-2 pt-2">

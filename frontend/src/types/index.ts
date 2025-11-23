@@ -8,6 +8,8 @@ export interface ConceptNode {
   parentId?: string
   children: string[]
   createdAt: Date
+  contentType: 'text' | 'image' | 'video'
+  contentUrl?: string
   metadata?: {
     sources?: string[]
     keywords?: string[]
@@ -24,6 +26,11 @@ export interface MindMapState {
   infoPanel: {
     nodeId: string
     position: { x: number; y: number }
+  } | null
+  actionMenu: {
+    nodeId: string
+    position: { x: number; y: number }
+    isVisible: boolean
   } | null
 }
 

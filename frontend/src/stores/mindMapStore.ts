@@ -1,18 +1,28 @@
 import { create } from 'zustand'
 import type { ConceptNode, MindMapState } from '../types'
-import { generateInitialConcepts, generateChildConcepts } from '../utils/conceptGeneration'
-import { calculateRadialPositions, calculateChildPositions } from '../utils/nodeLayout'
-import { updatePreferenceScore } from '../utils/preferenceEngine'
+import { conceptService } from '../services/conceptService'
+import { preferenceService } from '../services/preferenceService'
 
 interface MindMapStore extends MindMapState {
+  // New state for API integration
+  connectionStatus: 'connected' | 'disconnected' | 'error'
+  lastError: string | null
+  sessionId: string | null
+
   // Actions
   setCenterConcept: (concept: string) => Promise<void>
   expandNode: (nodeId: string) => Promise<void>
   selectNode: (nodeId: string | null) => void
-  updatePreference: (nodeId: string, action: 'click' | 'hover' | 'expand') => void
+  updatePreference: (nodeId: string, action: 'click' | 'hover' | 'expand') => Promise<void>
   openInfoPanel: (nodeId: string, position: { x: number; y: number }) => void
   closeInfoPanel: () => void
+  showActionMenu: (nodeId: string, position: { x: number; y: number }) => void
+  hideActionMenu: () => void
+  generateImage: (nodeId: string) => Promise<void>
+  generateVideo: (nodeId: string) => Promise<void>
   resetMap: () => void
+  clearError: () => void
+  testConnection: () => Promise<boolean>
 }
 
 export const useMindMapStore = create<MindMapStore>((set, get) => ({
@@ -23,6 +33,12 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
   loadingNodeId: null,
   selectedNodeId: null,
   infoPanel: null,
+  actionMenu: null,
+  
+  // New API state
+  connectionStatus: 'disconnected',
+  lastError: null,
+  sessionId: null,
 
   // Actions
   setCenterConcept: async (concept: string) => {
@@ -30,55 +46,37 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
       centerConcept: concept, 
       isGenerating: true,
       nodes: [],
-      loadingNodeId: 'center'
+      loadingNodeId: 'center',
+      lastError: null
     })
     
     try {
-      // Generate initial concepts around the center topic
-      const conceptLabels = await generateInitialConcepts(concept)
-      const centerPosition = { x: 600, y: 400 }
-      const radius = 200
-      
-      const positions = calculateRadialPositions(
-        conceptLabels.length, 
-        centerPosition, 
-        radius
-      )
-      
-      const initialNodes: ConceptNode[] = conceptLabels.map((label, index) => ({
-        id: `concept-${Date.now()}-${index}`,
-        label,
-        concept: label,
-        isExplored: false,
-        preferenceScore: 0, // Start neutral
-        position: positions[index],
-        children: [],
-        createdAt: new Date(),
-        metadata: {
-          keywords: [], // To be populated later
-          summary: `${label} related to ${concept}`
-        }
-      }))
+      // Use real API to initialize topic
+      const result = await conceptService.initializeTopic(concept)
       
       set({ 
-        nodes: initialNodes, 
+        nodes: result.nodes, 
         isGenerating: false,
-        loadingNodeId: null
+        loadingNodeId: null,
+        connectionStatus: 'connected'
       })
       
-      console.log(`✅ Generated ${initialNodes.length} initial concepts for "${concept}"`)
+      console.log(`✅ API-generated center node + ${result.nodes.length - 1} initial concepts for "${concept}"`)
       
     } catch (error) {
-      console.error('❌ Failed to generate initial concepts:', error)
+      console.error('❌ Failed to initialize topic via API:', error)
       set({ 
         isGenerating: false,
-        loadingNodeId: null
+        loadingNodeId: null,
+        connectionStatus: 'error',
+        lastError: error instanceof Error ? error.message : 'Unknown error'
       })
     }
   },
 
   expandNode: async (nodeId: string) => {
-    const { nodes } = get()
+    const state = get()
+    const { nodes } = state
     const node = nodes.find(n => n.id === nodeId)
     
     if (!node || node.isExplored) {
@@ -88,56 +86,39 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
 
     set({ 
       isGenerating: true,
-      loadingNodeId: nodeId 
+      loadingNodeId: nodeId,
+      lastError: null
     })
     
     try {
-      // Generate child concepts
-      const childLabels = await generateChildConcepts(node.concept)
-      const childPositions = calculateChildPositions(
-        node.position,
-        childLabels.length,
-        150 // Distance from parent
-      )
-      
-      const childNodes: ConceptNode[] = childLabels.map((label, index) => ({
-        id: `${nodeId}-child-${Date.now()}-${index}`,
-        label,
-        concept: label,
-        isExplored: false,
-        preferenceScore: Math.random() * 0.4 - 0.1, // Random slight preference for demo
-        position: childPositions[index],
-        parentId: nodeId,
-        children: [],
-        createdAt: new Date(),
-        metadata: {
-          keywords: [],
-          summary: `${label} - aspect of ${node.concept}`
-        }
-      }))
+      // Use real API to expand node
+      const result = await conceptService.expandNode(nodeId, state)
       
       set({
         nodes: [
-          // Update parent node as explored and add child IDs
+          // Update parent node with expanded state and children IDs
           ...nodes.map(n => 
             n.id === nodeId 
-              ? { ...n, isExplored: true, children: childNodes.map(c => c.id) }
+              ? { ...result.parentUpdated, children: result.children.map(c => c.id) }
               : n
           ),
           // Add new child nodes
-          ...childNodes
+          ...result.children
         ],
         isGenerating: false,
-        loadingNodeId: null
+        loadingNodeId: null,
+        connectionStatus: 'connected'
       })
       
-      console.log(`✅ Expanded "${node.label}" with ${childNodes.length} child concepts`)
+      console.log(`✅ API-expanded "${node.label}" with ${result.children.length} child concepts (reward: ${result.reward})`)
       
     } catch (error) {
-      console.error(`❌ Failed to expand node "${node?.label}":`, error)
+      console.error(`❌ Failed to expand node "${node?.label}" via API:`, error)
       set({ 
         isGenerating: false,
-        loadingNodeId: null
+        loadingNodeId: null,
+        connectionStatus: 'error',
+        lastError: error instanceof Error ? error.message : 'Unknown error'
       })
     }
   },
@@ -146,45 +127,44 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
     set({ selectedNodeId: nodeId })
   },
 
-  updatePreference: (nodeId: string, action: 'click' | 'hover' | 'expand') => {
-    const { nodes } = get()
+  updatePreference: async (nodeId: string, action: 'click' | 'hover' | 'expand') => {
+    const state = get()
+    const { nodes } = state
     const node = nodes.find(n => n.id === nodeId)
     
     if (!node) return
     
-    const newScore = updatePreferenceScore(node.preferenceScore, action)
-    
-    set({
-      nodes: nodes.map(n => 
-        n.id === nodeId 
-          ? { ...n, preferenceScore: newScore }
-          : n
-      )
-    })
-    
-    // Also update related nodes (simple propagation)
-    if (action === 'click' && Math.abs(newScore - node.preferenceScore) > 0.1) {
-      // Find semantically related nodes and boost them slightly
-      const relatedNodes = nodes.filter(n => 
-        n.id !== nodeId && 
-        (n.parentId === node.parentId || n.children.includes(nodeId))
-      )
+    try {
+      // Use real API to update preference
+      const result = await preferenceService.updatePreference(nodeId, action, state)
       
-      if (relatedNodes.length > 0) {
-        set({
-          nodes: get().nodes.map(n => {
-            if (relatedNodes.find(rn => rn.id === n.id)) {
-              return {
-                ...n,
-                preferenceScore: Math.min(1, n.preferenceScore + 0.05) // Small boost
-              }
-            }
-            return n
-          })
-        })
-      }
+      set({
+        nodes: nodes.map(n => {
+          // Update the target node
+          if (n.id === nodeId) {
+            return result.updatedNode
+          }
+          // Update affected siblings
+          const affectedSibling = result.affectedSiblings.find(sibling => sibling.id === n.id)
+          if (affectedSibling) {
+            return affectedSibling
+          }
+          return n
+        }),
+        connectionStatus: 'connected'
+      })
+      
+      console.log(`✅ API-updated preference for "${node.label}" with action "${action}"`)
+      
+    } catch (error) {
+      console.error(`❌ Failed to update preference for node "${node.label}" via API:`, error)
+      set({
+        connectionStatus: 'error',
+        lastError: error instanceof Error ? error.message : 'Unknown error'
+      })
     }
   },
+
 
   openInfoPanel: (nodeId: string, position: { x: number; y: number }) => {
     set({
@@ -200,6 +180,131 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
     })
   },
 
+  showActionMenu: (nodeId: string, position: { x: number; y: number }) => {
+    set({
+      actionMenu: { nodeId, position, isVisible: true },
+      infoPanel: null // Close info panel if open
+    })
+  },
+
+  hideActionMenu: () => {
+    set({ actionMenu: null })
+  },
+
+  generateImage: async (nodeId: string) => {
+    const state = get()
+    const { nodes } = state
+    const parentNode = nodes.find(n => n.id === nodeId)
+    
+    if (!parentNode) return
+
+    set({ 
+      isGenerating: true,
+      loadingNodeId: nodeId,
+      actionMenu: null
+    })
+
+    try {
+      // Mock image generation with test asset
+      const imageNode: ConceptNode = {
+        id: `${nodeId}-image-${Date.now()}`,
+        label: `Image: ${parentNode.label}`,
+        concept: `Generated image for ${parentNode.concept}`,
+        isExplored: true,
+        preferenceScore: 0,
+        position: { 
+          x: parentNode.position.x + 200, 
+          y: parentNode.position.y + 100 
+        },
+        parentId: nodeId,
+        children: [],
+        createdAt: new Date(),
+        contentType: 'image',
+        contentUrl: '/picture_test_jpg.jpg'
+      }
+
+      set({
+        nodes: [
+          ...nodes.map(n => 
+            n.id === nodeId 
+              ? { ...n, children: [...n.children, imageNode.id], isExplored: true }
+              : n
+          ),
+          imageNode
+        ],
+        isGenerating: false,
+        loadingNodeId: null
+      })
+
+      console.log(`✅ Generated image node for "${parentNode.label}"`)
+      
+    } catch (error) {
+      console.error('❌ Failed to generate image:', error)
+      set({ 
+        isGenerating: false,
+        loadingNodeId: null,
+        lastError: 'Failed to generate image'
+      })
+    }
+  },
+
+  generateVideo: async (nodeId: string) => {
+    const state = get()
+    const { nodes } = state
+    const parentNode = nodes.find(n => n.id === nodeId)
+    
+    if (!parentNode) return
+
+    set({ 
+      isGenerating: true,
+      loadingNodeId: nodeId,
+      actionMenu: null
+    })
+
+    try {
+      // Mock video generation with test asset
+      const videoNode: ConceptNode = {
+        id: `${nodeId}-video-${Date.now()}`,
+        label: `Video: ${parentNode.label}`,
+        concept: `Generated video for ${parentNode.concept}`,
+        isExplored: true,
+        preferenceScore: 0,
+        position: { 
+          x: parentNode.position.x - 200, 
+          y: parentNode.position.y + 100 
+        },
+        parentId: nodeId,
+        children: [],
+        createdAt: new Date(),
+        contentType: 'video',
+        contentUrl: '/video_test.mp4'
+      }
+
+      set({
+        nodes: [
+          ...nodes.map(n => 
+            n.id === nodeId 
+              ? { ...n, children: [...n.children, videoNode.id], isExplored: true }
+              : n
+          ),
+          videoNode
+        ],
+        isGenerating: false,
+        loadingNodeId: null
+      })
+
+      console.log(`✅ Generated video node for "${parentNode.label}"`)
+      
+    } catch (error) {
+      console.error('❌ Failed to generate video:', error)
+      set({ 
+        isGenerating: false,
+        loadingNodeId: null,
+        lastError: 'Failed to generate video'
+      })
+    }
+  },
+
   resetMap: () => {
     set({
       centerConcept: '',
@@ -207,8 +312,32 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
       isGenerating: false,
       loadingNodeId: null,
       selectedNodeId: null,
-      infoPanel: null
+      infoPanel: null,
+      actionMenu: null,
+      connectionStatus: 'disconnected',
+      lastError: null,
+      sessionId: null
     })
+  },
+
+  clearError: () => {
+    set({ lastError: null })
+  },
+
+  testConnection: async () => {
+    try {
+      const isHealthy = await conceptService.testConnection()
+      set({ 
+        connectionStatus: isHealthy ? 'connected' : 'error',
+        lastError: isHealthy ? null : 'Backend health check failed'
+      })
+      return isHealthy
+    } catch (error) {
+      set({ 
+        connectionStatus: 'error',
+        lastError: error instanceof Error ? error.message : 'Connection test failed'
+      })
+      return false
+    }
   }
 }))
-
