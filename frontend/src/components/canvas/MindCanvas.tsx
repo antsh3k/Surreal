@@ -1,44 +1,48 @@
-import { Tldraw, toRichText, type Editor } from 'tldraw'
+import { useRef } from 'react'
+import { Tldraw, type Editor } from 'tldraw'
 import 'tldraw/tldraw.css'
 import './MindCanvas.css'
+import { ConceptShapeUtil } from '../../shapes/ConceptShapeUtil'
 
 interface MindCanvasProps {
   children?: React.ReactNode
 }
 
 export const MindCanvas = ({ children }: MindCanvasProps) => {
+  const shapeCreatedRef = useRef(false)
+
   const handleMount = (editor: Editor) => {
+    // Prevent duplicate creation from React StrictMode double-mounting
+    if (shapeCreatedRef.current) {
+      console.log('⚠️ Shape already created, skipping duplicate creation')
+      return
+    }
+
     try {
-      // Create a simple rectangle shape to verify canvas is working
+      // Clear any existing shapes first (in case of persistence)
+      const existingShapes = editor.getCurrentPageShapes()
+      if (existingShapes.length > 0) {
+        console.log(`🧹 Clearing ${existingShapes.length} existing shape(s)`)
+        editor.deleteShapes(existingShapes.map(s => s.id))
+      }
+
+      // Create a concept shape with React Bits effects to verify canvas is working
       editor.createShape({
-        type: 'geo',
+        type: 'concept-shape',
         x: 300,
         y: 200,
         props: {
-          w: 200,
-          h: 100,
-          geo: 'rectangle',
-          fill: 'solid',
-          color: 'blue',
-          dash: 'draw',
-          size: 'm',
+          w: 250,
+          h: 120,
+          text: 'tldraw is working! 🎨',
+          preferenceScore: 0.8, // High preference triggers StarBorder and ShinyText
         },
       })
       
-      // Also create a text shape
-      editor.createShape({
-        type: 'text',
-        x: 350,
-        y: 230,
-        props: {
-          richText: toRichText('tldraw is working! 🎨'),
-          color: 'blue',
-        },
-      })
-      
-      console.log('✅ tldraw canvas mounted and test shapes created')
+      shapeCreatedRef.current = true
+      console.log('✅ tldraw canvas mounted and concept shape created with React Bits effects')
     } catch (error) {
-      console.warn('Could not create test shapes:', error)
+      console.warn('Could not create concept shape:', error)
       // Canvas is still working even if shape creation fails
       console.log('✅ tldraw canvas mounted (shape creation skipped)')
     }
@@ -49,6 +53,8 @@ export const MindCanvas = ({ children }: MindCanvasProps) => {
       <Tldraw 
         autoFocus={false}
         onMount={handleMount}
+        shapeUtils={[ConceptShapeUtil]}
+        persistenceKey={import.meta.env.DEV ? 'mindcanvas-dev' : 'mindcanvas'}
       />
       
       {/* Custom UI overlay - this is where our nodes will go */}

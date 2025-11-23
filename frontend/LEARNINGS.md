@@ -59,6 +59,12 @@ import './MindCanvas.css'
 - Keep canvas functionality (pan, zoom, touch)
 - Custom overlays render above canvas with proper z-index
 
+**Persistence & Duplicate Prevention**:
+- Use `persistenceKey` to isolate development data: `persistenceKey="mindcanvas-dev"`
+- Clear existing shapes before creating new ones to prevent duplicates from persistence
+- Use `useRef` to prevent duplicate creation from React StrictMode double-mounting
+- TipTap duplicate extension warning is from StrictMode - harmless in development
+
 ---
 
 ### React Bits Integration
