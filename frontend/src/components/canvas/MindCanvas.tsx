@@ -45,13 +45,11 @@ export const MindCanvas = ({ children }: MindCanvasProps) => {
   }
 
   return (
-    <div className="relative w-full h-screen mindcanvas-container" style={{ position: 'fixed', inset: 0 }}>
-      <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-        <Tldraw 
-          autoFocus={false}
-          onMount={handleMount}
-        />
-      </div>
+    <div className="mindcanvas-container" style={{ position: 'fixed', inset: 0 }}>
+      <Tldraw 
+        autoFocus={false}
+        onMount={handleMount}
+      />
       
       {/* Custom UI overlay - this is where our nodes will go */}
       <div className="absolute inset-0 pointer-events-none z-50">
