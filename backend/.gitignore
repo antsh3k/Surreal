@@ -58,3 +58,6 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+CLAUDE.md
+*TODO.md
