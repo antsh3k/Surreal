@@ -13,7 +13,7 @@ interface StarBorderProps {
 }
 
 const StarBorder = ({
-  as: Component = 'div',
+  as: Component = 'button',
   className = '',
   color = 'white',
   speed = '6s',
@@ -26,7 +26,7 @@ const StarBorder = ({
     <Component
       className={`star-border-container ${className}`}
       style={{
-        padding: `${thickness}px 0`,
+        padding: `${thickness}px`, // Use padding to create the border width
         ...style
       }}
       {...rest}
@@ -45,10 +45,9 @@ const StarBorder = ({
           animationDuration: speed
         }}
       ></div>
-      <div className="inner-content">{children}</div>
+      <div className="inner-content" style={{ background: 'inherit' }}>{children}</div>
     </Component>
   )
 }
 
 export default StarBorder
-

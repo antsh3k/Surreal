@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 /* Global styles */
 * {
@@ -8,9 +8,10 @@
 
 body {
   margin: 0;
-  font-family: 'Inter', system-ui, sans-serif;
-  background-color: #FAFAFA;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  background-color: #ffffff;
   overflow: hidden; /* Prevent body scroll with tldraw */
+  color: #0a0a0a;
 }
 
 /* Custom component styles */
@@ -62,5 +63,16 @@ body {
   100% {
     transform: scale(2.5);
     opacity: 0;
+  }
+}
+
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
   }
 }
