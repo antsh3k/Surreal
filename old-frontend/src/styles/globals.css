@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global styles */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, sans-serif;
+  background-color: #FAFAFA;
+  overflow: hidden; /* Prevent body scroll with tldraw */
+}
+
+/* Custom component styles */
+@layer components {
+  .concept-node {
+    @apply px-4 py-2 rounded-lg bg-white shadow-sm cursor-pointer;
+    @apply transition-all duration-200 ease-out;
+    @apply select-none; /* Prevent text selection */
+  }
+  
+  .concept-node-unexplored {
+    @apply border-2 border-dashed border-gray-400;
+  }
+  
+  .concept-node-explored {
+    @apply border-2 border-solid border-gray-900;
+  }
+  
+  .concept-node-preferred {
+    @apply border-green-500 bg-green-50;
+  }
+  
+  .concept-node-uncertain {
+    @apply border-orange-400 bg-orange-50;
+  }
+}
+
+/* Ripple animation styles */
+.loading-ripple {
+  @apply absolute inset-0 border-2 border-blue-500 rounded-lg;
+  animation: ripple 1.2s ease-out;
+}
+
+.loading-ripple-2 {
+  @apply absolute inset-0 border-2 border-blue-400 rounded-lg;
+  animation: ripple 1.2s ease-out 0.2s;
+}
+
+.loading-ripple-3 {
+  @apply absolute inset-0 border-2 border-blue-300 rounded-lg;
+  animation: ripple 1.2s ease-out 0.4s;
+}
+
