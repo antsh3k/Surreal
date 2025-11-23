@@ -7,6 +7,7 @@ import { ConceptNode } from './components/nodes/ConceptNode'
 import { LoadingNode } from './components/nodes/LoadingNode'
 import { InfoPanel } from './components/nodes/InfoPanel'
 import { StatusBar } from './components/ui/StatusBar'
+import type { ConceptNode as ConceptNodeType } from './types'
 
 export default function App() {
   const {
@@ -14,6 +15,7 @@ export default function App() {
     nodes,
     isGenerating,
     loadingNodeId,
+    selectedNodeId,
     infoPanel,
     actionMenu,
     connectionStatus,
@@ -36,10 +38,25 @@ export default function App() {
   const calculateSmartPanelPosition = (
     nodePosition: { x: number; y: number },
     panelWidth: number,
-    panelHeight: number
+    panelHeight: number,
+    node?: ConceptNodeType
   ) => {
     const padding = 20
-    const arrowOffset = 50 // Distance from node like arrow in InitialPrompt
+    let arrowOffset = 50 // Distance from node like arrow in InitialPrompt
+    
+    // Adjust offset based on node type and size
+    if (node) {
+      const isCenterNode = node.id === 'center'
+      const isMediaNode = node.contentType === 'image' || node.contentType === 'video'
+      
+      if (isCenterNode) {
+        arrowOffset = 120 // Larger center node needs more space
+      } else if (isMediaNode) {
+        // Use expected dimensions from metadata or default media sizes
+        const width = node.metadata?.expectedWidth || 180
+        arrowOffset = width / 2 + 30 // Half node width + some padding
+      }
+    }
     
     // Try to position panel to the right of the node first
     let x = nodePosition.x + arrowOffset
@@ -70,22 +87,24 @@ export default function App() {
     const node = nodes.find(n => n.id === nodeId)
     if (!node) return
 
+    // Select node immediately (for shiny text effect) - NO loading state
     selectNode(nodeId)
     
-    // Update preference asynchronously
-    try {
-      await updatePreference(nodeId, 'click')
-    } catch (error) {
+    // Update preference asynchronously (don't await, don't block UI)
+    updatePreference(nodeId, 'click').catch(error => {
       console.error('Failed to update click preference:', error)
-    }
+    })
 
-    if (node.isExplored) {
-      // Open info panel for explored nodes - smart positioning like arrow
+    // Check if this is a completed media node (has content)
+    const isCompletedMedia = (node.contentType === 'image' || node.contentType === 'video') && node.contentUrl
+
+    if (node.isExplored || isCompletedMedia) {
+      // Open info panel for explored nodes or completed media - smart positioning like arrow
       const panelPosition = calculateSmartPanelPosition(node.position, 350, 400)
       openInfoPanel(nodeId, panelPosition)
     } else {
-      // Show action menu for unexplored nodes - smart positioning like arrow
-      const menuPosition = calculateSmartPanelPosition(node.position, 180, 140)
+      // Show action menu for unexplored text nodes - smart positioning like arrow
+      const menuPosition = calculateSmartPanelPosition(node.position, 180, 140, node)
       showActionMenu(nodeId, menuPosition)
     }
   }
@@ -116,7 +135,7 @@ export default function App() {
 
   // Handle node hover - disabled to prevent render thrashing
   // Hover events trigger too frequently and cause connections to flicker
-  const handleNodeHover = async (_nodeId: string, _isHovered: boolean) => {
+  const handleNodeHover = () => {
     // No-op: hover tracking disabled for performance
     // Only track meaningful interactions (click, expand)
   }
@@ -179,6 +198,7 @@ export default function App() {
             onClick={handleNodeClick}
             onHover={handleNodeHover}
             isLoading={loadingNodeId === node.id}
+            selectedNodeId={selectedNodeId}
           />
         ))}
 

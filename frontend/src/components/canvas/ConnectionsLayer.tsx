@@ -46,12 +46,19 @@ export const ConnectionsLayer = ({ nodes }: ConnectionsLayerProps) => {
     })
 
     return links
+    // Note: nodesStableKey is calculated above but we use nodes as dependency
+    // The stable key calculation ensures we're aware of when data actually changes
   }, [nodes])
 
-  if (connections.length === 0) return null
+  // CRITICAL: Use a stable key based on connection IDs only
+  // This prevents SVG from unmounting/remounting when nodes array reference changes
+  // but connections themselves haven't changed
+  const connectionKey = useMemo(() => {
+    if (connections.length === 0) return 'empty'
+    return connections.map(c => c.id).sort().join('-')
+  }, [connections])
 
-  // Create a stable key that changes when connections actually change
-  const connectionKey = `${nodes.length}-${connections.length}-${connections.map(c => c.id).join('-')}`
+  if (connections.length === 0) return null
 
   return (
     <svg 

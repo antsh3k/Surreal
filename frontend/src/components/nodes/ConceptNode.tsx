@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import type { ConceptNode as ConceptNodeType } from '../../types'
 import { ImagePlaceholder } from '../ui/ImagePlaceholder'
+import { ShinyText } from '../ui/ShinyText'
 
 interface ConceptNodeProps {
   node: ConceptNodeType
   onClick: (nodeId: string) => void
   onHover?: (nodeId: string, isHovered: boolean) => void
   isLoading?: boolean
+  selectedNodeId?: string | null
   className?: string
 }
 
@@ -15,18 +17,10 @@ export const ConceptNode = ({
   onClick,
   onHover,
   isLoading = false,
+  selectedNodeId = null,
   className = ''
 }: ConceptNodeProps) => {
-  const [animationPhase, setAnimationPhase] = useState(0)
   const [mediaDimensions, setMediaDimensions] = useState<{ width: number; height: number } | null>(null)
-
-  useEffect(() => {
-    if (!isLoading) return
-    const interval = setInterval(() => {
-      setAnimationPhase(prev => (prev + 1) % 4)
-    }, 300)
-    return () => clearInterval(interval)
-  }, [isLoading])
 
   // Load media dimensions when node changes
   useEffect(() => {
@@ -134,27 +128,16 @@ export const ConceptNode = ({
     onHover?.(node.id, false)
   }
 
+  // Determine if we should show shiny text effect
+  const isSelected = selectedNodeId === node.id
+  const isTextNode = node.contentType !== 'image' && node.contentType !== 'video'
+  const showShinyText = isSelected && !node.isExplored && isTextNode && !isLoading
+
   const renderContent = () => (
     <div className="relative z-10 min-w-[120px] text-center">
-      {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-1">
-          <span className="text-sm font-medium text-blue-600">Thinking</span>
-          <div className="flex justify-center space-x-1 mt-1">
-            {[0, 1, 2].map((dot) => (
-              <div
-                key={dot}
-                className={`
-                  w-1 h-1 bg-blue-500 rounded-full transition-opacity duration-300
-                  ${animationPhase === dot ? 'opacity-100' : 'opacity-30'}
-                `}
-              />
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div>
-          {/* Media-only content for image/video nodes */}
-          {node.contentType === 'image' ? (
+      <div>
+        {/* Media-only content for image/video nodes */}
+        {node.contentType === 'image' ? (
             node.contentUrl ? (
               <img 
                 src={node.contentUrl} 
@@ -201,15 +184,21 @@ export const ConceptNode = ({
               />
             )
           ) : (
-            /* Text content for regular nodes - clean API-relevant info only */
+            /* Text content for regular nodes - apply shiny effect when selected and unexplored */
             <div className="text-center">
-              <span className={`text-sm font-medium ${node.id === 'center' ? 'text-blue-600' : 'text-gray-900'}`}>
-                {node.concept.length > 35 ? `${node.concept.slice(0, 32)}...` : node.concept}
-              </span>
+              {showShinyText ? (
+                <ShinyText 
+                  text={node.concept.length > 35 ? `${node.concept.slice(0, 32)}...` : node.concept}
+                  className="text-sm font-medium"
+                />
+              ) : (
+                <span className={`text-sm font-medium ${node.id === 'center' ? 'text-blue-600' : 'text-gray-900'}`}>
+                  {node.concept.length > 35 ? `${node.concept.slice(0, 32)}...` : node.concept}
+                </span>
+              )}
             </div>
           )}
         </div>
-      )}
     </div>
   )
 

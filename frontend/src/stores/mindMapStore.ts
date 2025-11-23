@@ -323,7 +323,11 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
                 ...node,
                 label: `Image: ${parentNode.label}`,
                 contentUrl: localUrl,
-                isExplored: false // Make clickable with full menu options
+                isExplored: true, // Mark as completed media - no action menu needed
+                metadata: {
+                  ...node.metadata,
+                  isGenerating: false
+                }
               }
             : node
         ),
@@ -447,7 +451,11 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
                 ...node,
                 label: `Video: ${parentNode.label}`,
                 contentUrl: localUrl,
-                isExplored: false // Make clickable with full menu options
+                isExplored: true, // Mark as completed media - no action menu needed
+                metadata: {
+                  ...node.metadata,
+                  isGenerating: false
+                }
               }
             : node
         ),

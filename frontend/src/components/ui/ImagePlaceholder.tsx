@@ -14,7 +14,7 @@ export const ImagePlaceholder = ({
   return (
     <div 
       className={`
-        border-2 border-dashed border-blue-400 bg-white rounded-lg 
+        bg-gray-50 rounded-lg 
         flex items-center justify-center animate-pulse
         ${className}
       `}
