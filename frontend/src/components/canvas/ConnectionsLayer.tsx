@@ -28,6 +28,8 @@ export const ConnectionsLayer = ({ nodes }: ConnectionsLayerProps) => {
   const connections = useMemo(() => {
     const links: Connection[] = []
 
+    console.log('🔗 ConnectionsLayer: Building connections from nodes:', nodes.map(n => ({ id: n.id, parentId: n.parentId, isExplored: n.isExplored })))
+
     nodes.forEach(node => {
       if (node.parentId) {
         const parent = nodes.find(n => n.id === node.parentId)
@@ -35,19 +37,23 @@ export const ConnectionsLayer = ({ nodes }: ConnectionsLayerProps) => {
           const from = getNodeCenter(parent)
           const to = getNodeCenter(node)
           
-          links.push({
+          const connection = {
             id: `${parent.id}-${node.id}`,
             from,
             to,
             isExplored: node.isExplored
-          })
+          }
+          
+          console.log('🔗 Adding connection:', connection.id, 'from', parent.id, 'to', node.id, 'explored:', connection.isExplored)
+          links.push(connection)
+        } else {
+          console.warn('⚠️ Parent not found for node:', node.id, 'parentId:', node.parentId)
         }
       }
     })
 
+    console.log('🔗 Total connections built:', links.length)
     return links
-    // Note: nodesStableKey is calculated above but we use nodes as dependency
-    // The stable key calculation ensures we're aware of when data actually changes
   }, [nodes])
 
   // CRITICAL: Use a stable key based on connection IDs only

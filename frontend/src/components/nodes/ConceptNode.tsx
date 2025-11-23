@@ -7,7 +7,6 @@ interface ConceptNodeProps {
   node: ConceptNodeType
   onClick: (nodeId: string) => void
   onHover?: (nodeId: string, isHovered: boolean) => void
-  isLoading?: boolean
   selectedNodeId?: string | null
   className?: string
 }
@@ -16,7 +15,6 @@ export const ConceptNode = ({
   node,
   onClick,
   onHover,
-  isLoading = false,
   selectedNodeId = null,
   className = ''
 }: ConceptNodeProps) => {
@@ -73,11 +71,14 @@ export const ConceptNode = ({
     }
   }, [node.contentType, node.contentUrl])
   
+  // Calculate node type flags once at component level (used throughout component)
+  const isCenterNode = node.id === 'center'
+  const isMediaNode = node.contentType === 'image' || node.contentType === 'video'
+  const isTextNode = !isMediaNode && !isCenterNode
+  const isSelected = selectedNodeId === node.id
+  
   // Simplified node styling - only solid vs dashed border
   const getNodeClasses = () => {
-    const isCenterNode = node.id === 'center'
-    const isMediaNode = node.contentType === 'image' || node.contentType === 'video'
-    
     if (isCenterNode) {
       // Center node is larger and has distinct styling
       return `
@@ -103,10 +104,7 @@ export const ConceptNode = ({
       ${className}
     `
     
-    if (isLoading) {
-      return `${baseClasses} border-blue-400 border-solid`
-    }
-    
+    // Simple 2-state logic: solid (explored) or dashed (unexplored)
     if (node.isExplored) {
       return `${baseClasses} border-gray-800 border-solid`
     } else {
@@ -115,9 +113,7 @@ export const ConceptNode = ({
   }
 
   const handleClick = () => {
-    if (!isLoading) {
-      onClick(node.id)
-    }
+    onClick(node.id)
   }
 
   const handleMouseEnter = () => {
@@ -129,9 +125,7 @@ export const ConceptNode = ({
   }
 
   // Determine if we should show shiny text effect
-  const isSelected = selectedNodeId === node.id
-  const isTextNode = node.contentType !== 'image' && node.contentType !== 'video'
-  const showShinyText = isSelected && !node.isExplored && isTextNode && !isLoading
+  const showShinyText = isSelected && !node.isExplored && isTextNode
 
   const renderContent = () => (
     <div className="relative z-10 min-w-[120px] text-center">
@@ -192,7 +186,7 @@ export const ConceptNode = ({
                   className="text-sm font-medium"
                 />
               ) : (
-                <span className={`text-sm font-medium ${node.id === 'center' ? 'text-blue-600' : 'text-gray-900'}`}>
+                <span className={`text-sm font-medium text-gray-900`}>
                   {node.concept.length > 35 ? `${node.concept.slice(0, 32)}...` : node.concept}
                 </span>
               )}
@@ -202,9 +196,6 @@ export const ConceptNode = ({
     </div>
   )
 
-  const isCenterNode = node.id === 'center'
-  const isMediaNode = node.contentType === 'image' || node.contentType === 'video'
-  
   // Calculate offset for centering different node types
   const getNodeOffset = () => {
     if (isCenterNode) return { x: 90, y: 25 }
@@ -231,13 +222,11 @@ export const ConceptNode = ({
         onClick={handleClick}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        disabled={isLoading}
         className={`
           ${getNodeClasses()}
-          ${isLoading ? 'cursor-wait' : 'cursor-pointer'}
+          cursor-pointer
           ${isMediaNode ? 'hover:shadow-xl' : 'hover:shadow-lg'}
           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
-          disabled:cursor-not-allowed
           pointer-events-auto
           ${isMediaNode ? 'z-[20]' : ''}
         `}

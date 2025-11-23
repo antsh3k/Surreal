@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import type { ConceptNode } from '../../types'
 
 interface InfoPanelProps {
@@ -8,11 +8,16 @@ interface InfoPanelProps {
 }
 
 export const InfoPanel = ({ node, position, onClose }: InfoPanelProps) => {
-  const [details, setDetails] = useState(node.metadata)
-  const [isLoading, setIsLoading] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
   
-  console.log(`📋 InfoPanel opened for node "${node.label}"`, {
+  // Use node.metadata directly instead of storing in state
+  const details = node.metadata || {
+    summary: `${node.concept} - AI-generated concept`,
+    keywords: [],
+    sources: []
+  }
+  
+  console.log(`📋 InfoPanel opened for node "${node.concept}"`, {
     nodeId: node.id,
     isExplored: node.isExplored,
     preferenceScore: node.preferenceScore,
@@ -45,26 +50,18 @@ export const InfoPanel = ({ node, position, onClose }: InfoPanelProps) => {
   }, [onClose])
 
   useEffect(() => {
-    // Use backend metadata directly instead of mock generation
-    console.log(`📋 InfoPanel using backend metadata for "${node.label}"`, {
+    // Log backend metadata usage
+    console.log(`📋 InfoPanel using backend metadata for "${node.concept}"`, {
       hasBackendSummary: !!node.metadata?.summary,
       backendKeywords: node.metadata?.keywords || [],
       backendSources: node.metadata?.sources || []
     })
-    
-    // Always use the backend metadata directly
-    setDetails(node.metadata || {
-      summary: `${node.concept} - AI-generated concept`,
-      keywords: [],
-      sources: []
-    })
-    setIsLoading(false)
   }, [node.metadata, node.concept])
 
   // Adjust panel position to stay within viewport (now in screen space)
   const adjustedPosition = {
-    x: Math.min(Math.max(16, position.x), window.innerWidth - 336), // Panel width = 320px + 16px margin
-    y: Math.max(16, Math.min(position.y, window.innerHeight - 416)) // Panel height ≈ 400px + 16px margin
+    x: Math.min(Math.max(16, position.x), window.innerWidth - 376), // Panel width = 360px + 16px margin
+    y: Math.max(16, Math.min(position.y, window.innerHeight - 500)) // Panel height ≈ 500px + 16px margin
   }
 
   return (
@@ -74,17 +71,17 @@ export const InfoPanel = ({ node, position, onClose }: InfoPanelProps) => {
       style={{
         left: adjustedPosition.x,
         top: adjustedPosition.y,
-        width: '320px'
+        width: '360px'
       }}
     >
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-100">
-        <h3 className="text-lg font-semibold text-gray-900 truncate">
-          {node.label}
+        <h3 className="text-lg font-semibold text-gray-900 break-words pr-2">
+          {node.concept}
         </h3>
         <button
           onClick={onClose}
-          className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100"
+          className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100 flex-shrink-0"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -93,46 +90,56 @@ export const InfoPanel = ({ node, position, onClose }: InfoPanelProps) => {
       </div>
 
       {/* Content */}
-      <div className="p-4 space-y-4">
-        {/* Preference Score Indicator */}
-        <div className="flex items-center space-x-2">
-          <span className="text-sm text-gray-600">Relevance:</span>
-          <div className="flex-1 bg-gray-200 rounded-full h-2">
-            <div 
-              className={`h-2 rounded-full transition-all duration-300 ${
-                node.preferenceScore > 0.3 ? 'bg-green-500' :
-                node.preferenceScore < -0.3 ? 'bg-orange-500' : 'bg-gray-400'
-              }`}
-              style={{ 
-                width: `${Math.max(10, (node.preferenceScore + 1) * 50)}%` 
-              }}
-            />
+      <div className="p-4 space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
+        {/* Summary - Prominently displayed at top */}
+        {details?.summary && (
+          <div className="space-y-2">
+            <h4 className="text-sm font-semibold text-gray-900">Summary</h4>
+            <div className="text-sm text-gray-700 leading-relaxed bg-gray-50 p-3 rounded-lg">
+              {details.summary}
+            </div>
           </div>
-          <span className="text-xs text-gray-500">
-            {node.preferenceScore > 0.3 ? 'High' : 
-             node.preferenceScore < -0.3 ? 'Low' : 'Unknown'}
-          </span>
-        </div>
+        )}
 
-        {/* Backend Data Source Indicator */}
-        <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">
-          📡 Backend AI Data • Node ID: {node.id.substring(0, 8)}...
-        </div>
+        {/* Uncertainty Score - Display after Summary */}
+        {details?.uncertainty_score !== undefined && (
+          <div className="space-y-2">
+            <h4 className="text-sm font-semibold text-gray-900">Uncertainty</h4>
+            <div className="flex items-center space-x-3">
+              <div className="flex-1 bg-gray-200 rounded-full h-2.5">
+                <div 
+                  className={`h-2.5 rounded-full transition-all duration-300 ${
+                    details.uncertainty_score < 0.3 ? 'bg-green-500' :
+                    details.uncertainty_score < 0.7 ? 'bg-yellow-500' : 'bg-red-500'
+                  }`}
+                  style={{ 
+                    width: `${Math.min(100, details.uncertainty_score * 100)}%` 
+                  }}
+                />
+              </div>
+              <span className={`text-xs font-medium ${
+                details.uncertainty_score < 0.3 ? 'text-green-700' :
+                details.uncertainty_score < 0.7 ? 'text-yellow-700' : 'text-red-700'
+              }`}>
+                {details.uncertainty_score.toFixed(2)}
+              </span>
+            </div>
+            <div className="text-xs text-gray-500">
+              {details.uncertainty_score < 0.3 ? 'Low uncertainty' :
+               details.uncertainty_score < 0.7 ? 'Moderate uncertainty' : 'High uncertainty'}
+            </div>
+          </div>
+        )}
 
-        {/* Summary */}
-        <div className="text-sm text-gray-700 leading-relaxed">
-          {details?.summary || `${node.concept} - AI-generated concept from backend`}
-        </div>
-
-        {/* Keywords */}
+        {/* Keywords - Prominently displayed */}
         {details?.keywords && details.keywords.length > 0 && (
           <div className="space-y-2">
-            <h4 className="text-sm font-medium text-gray-900">Key Concepts:</h4>
-            <div className="flex flex-wrap gap-1">
+            <h4 className="text-sm font-semibold text-gray-900">Keywords</h4>
+            <div className="flex flex-wrap gap-2">
               {details.keywords.map((keyword) => (
                 <span
                   key={keyword}
-                  className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-full"
+                  className="px-3 py-1.5 text-xs font-medium bg-blue-50 text-blue-700 rounded-full border border-blue-200"
                 >
                   {keyword}
                 </span>
@@ -141,60 +148,26 @@ export const InfoPanel = ({ node, position, onClose }: InfoPanelProps) => {
           </div>
         )}
 
-        {/* Backend Sources */}
+        {/* Sources - All sources as clickable links */}
         {details?.sources && details.sources.length > 0 && (
           <div className="space-y-2">
-            <h4 className="text-sm font-medium text-gray-900">Sources:</h4>
-            <div className="space-y-1">
-              {details.sources.slice(0, 3).map((source, index) => (
-                <div key={index} className="text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded">
-                  📄 {source}
-                </div>
+            <h4 className="text-sm font-semibold text-gray-900">Sources</h4>
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {details.sources.map((source, index) => (
+                <a
+                  key={index}
+                  href={source}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-xs text-blue-600 hover:text-blue-800 bg-gray-50 hover:bg-blue-50 px-3 py-2 rounded-lg border border-gray-200 hover:border-blue-300 transition-colors break-all"
+                >
+                  <span className="inline-block mr-2">📄</span>
+                  {source}
+                </a>
               ))}
             </div>
           </div>
         )}
-
-        {/* Relationships */}
-        {node.children.length > 0 && (
-          <div className="space-y-2">
-            <h4 className="text-sm font-medium text-gray-900">Explored Aspects:</h4>
-            <div className="text-sm text-gray-600">
-              {node.children.length} sub-concept{node.children.length !== 1 ? 's' : ''} discovered via backend AI
-            </div>
-          </div>
-        )}
-
-        {/* Backend Metadata */}
-        <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
-          <div>🤖 Generated: {node.createdAt.toLocaleDateString()} {node.createdAt.toLocaleTimeString()}</div>
-          <div>🎯 Parent: {node.parentId ? node.parentId.substring(0, 8) + '...' : 'Root concept'}</div>
-          <div>📊 Score: {node.preferenceScore.toFixed(3)}</div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex space-x-2 pt-2">
-          <button
-            onClick={() => console.log('Generate image for:', node.label)}
-            className="flex-1 px-3 py-2 text-xs bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
-          >
-            🎨 Generate Image
-          </button>
-          <button
-            onClick={() => console.log('Find videos for:', node.label)}
-            className="flex-1 px-3 py-2 text-xs bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors"
-          >
-            🎥 Find Videos
-          </button>
-        </div>
-      </div>
-
-      {/* Footer */}
-      <div className="px-4 py-2 bg-gray-50 rounded-b-xl">
-        <div className="text-xs text-gray-500 text-center">
-          Created {node.createdAt.toLocaleDateString()} • 
-          {node.isExplored ? ' Explored' : ' Unexplored'}
-        </div>
       </div>
     </div>
   )

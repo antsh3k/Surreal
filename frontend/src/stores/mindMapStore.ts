@@ -61,7 +61,6 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
   centerConcept: '',
   nodes: [],
   isGenerating: false,
-  loadingNodeId: null,
   selectedNodeId: null,
   infoPanel: null,
   actionMenu: null,
@@ -77,7 +76,6 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
       centerConcept: concept, 
       isGenerating: true,
       nodes: [],
-      loadingNodeId: 'center',
       lastError: null
     })
     
@@ -88,7 +86,7 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
       set({ 
         nodes: result.nodes, 
         isGenerating: false,
-        loadingNodeId: null,
+        selectedNodeId: null,
         connectionStatus: 'connected'
       })
       
@@ -98,7 +96,7 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
       console.error('❌ Failed to initialize topic via API:', error)
       set({ 
         isGenerating: false,
-        loadingNodeId: null,
+        selectedNodeId: null,
         connectionStatus: 'error',
         lastError: error instanceof Error ? error.message : 'Unknown error'
       })
@@ -117,7 +115,6 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
 
     set({ 
       isGenerating: true,
-      loadingNodeId: nodeId,
       lastError: null
     })
     
@@ -127,30 +124,38 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
       
       set({
         nodes: [
-          // Update parent node with expanded state and children IDs
+          // Update parent node with explored state and children IDs
           ...nodes.map(n => 
             n.id === nodeId 
-              ? { ...result.parentUpdated, children: result.children.map(c => c.id) }
+              ? { 
+                  ...n, // Preserve ALL original node properties first
+                  ...result.parentUpdated, // Then apply API updates
+                  id: nodeId, // Ensure ID is preserved
+                  parentId: n.parentId, // CRITICAL: Preserve parent relationship
+                  children: result.children.map(c => c.id),
+                  isExplored: true // Mark as explored when action completes
+                }
               : n
           ),
-          // Add new child nodes - ensure they are unexplored with dashed borders
+          // Add new child nodes - unexplored with dashed borders
           ...result.children.map(child => ({
             ...child,
-            isExplored: false  // Force new nodes to be unexplored (dashed borders)
+            isExplored: false
           }))
         ],
         isGenerating: false,
-        loadingNodeId: null,
+        selectedNodeId: null, // Clear selection when action completes
         connectionStatus: 'connected'
       })
       
       console.log(`✅ API-expanded "${node.label}" with ${result.children.length} child concepts (reward: ${result.reward})`)
+      console.log('🔍 Updated nodes after expansion:', get().nodes.map(n => ({ id: n.id, parentId: n.parentId, isExplored: n.isExplored })))
       
     } catch (error) {
       console.error(`❌ Failed to expand node "${node?.label}" via API:`, error)
       set({ 
         isGenerating: false,
-        loadingNodeId: null,
+        selectedNodeId: null,
         connectionStatus: 'error',
         lastError: error instanceof Error ? error.message : 'Unknown error'
       })
@@ -176,12 +181,22 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
         nodes: nodes.map(n => {
           // Update the target node
           if (n.id === nodeId) {
-            return result.updatedNode
+            return {
+              ...n, // Preserve ALL original node properties first
+              ...result.updatedNode, // Then apply API updates
+              id: nodeId, // Ensure ID is preserved
+              parentId: n.parentId // CRITICAL: Preserve parent relationship
+            }
           }
           // Update affected siblings
           const affectedSibling = result.affectedSiblings.find(sibling => sibling.id === n.id)
           if (affectedSibling) {
-            return affectedSibling
+            return {
+              ...n, // Preserve original properties first
+              ...affectedSibling, // Then apply updates
+              id: n.id, // Preserve node ID for connections
+              parentId: n.parentId // CRITICAL: Preserve parent relationship
+            }
           }
           return n
         }),
@@ -234,7 +249,6 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
 
     set({ 
       isGenerating: true,
-      loadingNodeId: nodeId,
       actionMenu: null,
       lastError: null
     })
@@ -287,7 +301,10 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
         nodes: [
           ...nodes.map(n => 
             n.id === nodeId 
-              ? { ...n, children: [...n.children, tempImageNode.id], isExplored: true }
+              ? { 
+                  ...n, 
+                  children: [...n.children, tempImageNode.id]
+                }
               : n
           ),
           tempImageNode
@@ -317,22 +334,27 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
 
       // Update the node with the real generated image
       set({
-        nodes: get().nodes.map(node => 
-          node.id === tempImageNode.id 
-            ? {
-                ...node,
-                label: `Image: ${parentNode.label}`,
-                contentUrl: localUrl,
-                isExplored: true, // Mark as completed media - no action menu needed
-                metadata: {
-                  ...node.metadata,
-                  isGenerating: false
+        nodes: [
+          // Mark parent node as explored when action completes
+          ...get().nodes.map(node => 
+            node.id === tempImageNode.id 
+              ? {
+                  ...node,
+                  label: `Image: ${parentNode.label}`,
+                  contentUrl: localUrl,
+                  isExplored: true, // Mark as completed media
+                  metadata: {
+                    ...node.metadata,
+                    isGenerating: false
+                  }
                 }
-              }
-            : node
-        ),
+              : node.id === nodeId
+              ? { ...node, isExplored: true } // Mark parent as explored too
+              : node
+          )
+        ],
         isGenerating: false,
-        loadingNodeId: null,
+        selectedNodeId: null, // Clear selection when action completes
         connectionStatus: 'connected'
       })
 
@@ -345,7 +367,7 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
       set({
         nodes: get().nodes.filter(node => node.id !== tempImageNode.id),
         isGenerating: false,
-        loadingNodeId: null,
+        selectedNodeId: null,
         connectionStatus: 'error',
         lastError: error instanceof Error ? error.message : 'Image generation failed'
       })
@@ -361,7 +383,6 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
 
     set({ 
       isGenerating: true,
-      loadingNodeId: nodeId,
       actionMenu: null,
       lastError: null
     })
@@ -415,7 +436,10 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
         nodes: [
           ...nodes.map(n => 
             n.id === nodeId 
-              ? { ...n, children: [...n.children, tempVideoNode.id], isExplored: true }
+              ? { 
+                  ...n, 
+                  children: [...n.children, tempVideoNode.id]
+                }
               : n
           ),
           tempVideoNode
@@ -445,22 +469,27 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
 
       // Update the node with the real generated video
       set({
-        nodes: get().nodes.map(node => 
-          node.id === tempVideoNode.id 
-            ? {
-                ...node,
-                label: `Video: ${parentNode.label}`,
-                contentUrl: localUrl,
-                isExplored: true, // Mark as completed media - no action menu needed
-                metadata: {
-                  ...node.metadata,
-                  isGenerating: false
+        nodes: [
+          // Mark parent node as explored when action completes
+          ...get().nodes.map(node => 
+            node.id === tempVideoNode.id 
+              ? {
+                  ...node,
+                  label: `Video: ${parentNode.label}`,
+                  contentUrl: localUrl,
+                  isExplored: true, // Mark as completed media
+                  metadata: {
+                    ...node.metadata,
+                    isGenerating: false
+                  }
                 }
-              }
-            : node
-        ),
+              : node.id === nodeId
+              ? { ...node, isExplored: true } // Mark parent as explored too
+              : node
+          )
+        ],
         isGenerating: false,
-        loadingNodeId: null,
+        selectedNodeId: null, // Clear selection when action completes
         connectionStatus: 'connected'
       })
 
@@ -473,7 +502,7 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
       set({
         nodes: get().nodes.filter(node => node.id !== tempVideoNode.id),
         isGenerating: false,
-        loadingNodeId: null,
+        selectedNodeId: null,
         connectionStatus: 'error',
         lastError: error instanceof Error ? error.message : 'Video generation failed'
       })
@@ -485,7 +514,6 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
       centerConcept: '',
       nodes: [],
       isGenerating: false,
-      loadingNodeId: null,
       selectedNodeId: null,
       infoPanel: null,
       actionMenu: null,

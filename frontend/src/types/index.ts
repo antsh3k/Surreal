@@ -14,6 +14,7 @@ export interface ConceptNode {
     sources?: string[]
     keywords?: string[]
     summary?: string
+    uncertainty_score?: number
     isGenerating?: boolean
     expectedWidth?: number
     expectedHeight?: number
@@ -24,7 +25,6 @@ export interface MindMapState {
   centerConcept: string
   nodes: ConceptNode[]
   isGenerating: boolean
-  loadingNodeId: string | null
   selectedNodeId: string | null
   infoPanel: {
     nodeId: string

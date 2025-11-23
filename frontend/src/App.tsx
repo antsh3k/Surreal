@@ -14,7 +14,6 @@ export default function App() {
     centerConcept,
     nodes,
     isGenerating,
-    loadingNodeId,
     selectedNodeId,
     infoPanel,
     actionMenu,
@@ -115,7 +114,13 @@ export default function App() {
 
     const nodeId = actionMenu.nodeId
 
+    // CRITICAL: Explicitly ensure node is selected BEFORE action executes
+    // This guarantees shiny text appears when action is clicked
+    selectNode(nodeId)
+
     try {
+      // CRITICAL: Keep node selected to maintain shiny text effect
+      // Don't clear selectedNodeId - it should stay set after action completes
       switch (action) {
         case 'generate-nodes':
           await expandNode(nodeId)
@@ -128,8 +133,12 @@ export default function App() {
           await generateVideo(nodeId)
           break
       }
+      // CRITICAL: Re-assert selection after action completes to ensure shiny text persists
+      selectNode(nodeId)
     } catch (error) {
       console.error(`Failed to execute action ${action}:`, error)
+      // Even on error, keep node selected
+      selectNode(nodeId)
     }
   }
 
@@ -197,13 +206,12 @@ export default function App() {
             node={node}
             onClick={handleNodeClick}
             onHover={handleNodeHover}
-            isLoading={loadingNodeId === node.id}
             selectedNodeId={selectedNodeId}
           />
         ))}
 
-        {/* Loading Node for INITIAL generation only (when loadingNodeId is 'center') */}
-        {isGenerating && loadingNodeId === 'center' && (
+        {/* Loading Node for INITIAL center concept generation only */}
+        {isGenerating && nodes.length === 0 && (
           <LoadingNode 
             position={{ x: 600, y: 400 }}
             label={centerConcept}
