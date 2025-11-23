@@ -24,8 +24,8 @@ export class ConceptService {
       
       const result = NodeAdapter.fromInitResponse(response)
       
-      // Apply canvas-specific positioning
-      result.nodes = NodeAdapter.calculateCanvasPositions(result.nodes)
+      // Apply canvas-specific positioning (positioning already applied in fromInitResponse)
+      // result.nodes = NodeAdapter.calculateCanvasPositions(result.nodes)
       
       console.log('✅ Processed nodes:', result)
       return result
@@ -56,7 +56,7 @@ export class ConceptService {
       
       // Apply canvas-specific positioning for new children
       const allNodes = [...currentState.nodes, ...result.children]
-      const repositionedNodes = NodeAdapter.calculateCanvasPositions(allNodes)
+      const repositionedNodes = NodeAdapter.calculateCanvasPositions(allNodes, { x: 600, y: 400 }, 'compass')
       
       // Extract just the new children with updated positions
       result.children = repositionedNodes.filter(node => 

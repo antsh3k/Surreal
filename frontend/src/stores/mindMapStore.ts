@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { ConceptNode, MindMapState } from '../types'
 import { conceptService } from '../services/conceptService'
 import { preferenceService } from '../services/preferenceService'
+import { apiClient } from '../services/apiClient'
 
 interface MindMapStore extends MindMapState {
   // New state for API integration
@@ -23,6 +24,36 @@ interface MindMapStore extends MindMapState {
   resetMap: () => void
   clearError: () => void
   testConnection: () => Promise<boolean>
+}
+
+// Helper function to download and save media locally
+const downloadAndSaveMedia = async (mediaUrl: string, filename: string): Promise<string> => {
+  try {
+    console.log(`📥 Downloading media: ${filename}`)
+    
+    // Download the media from the remote URL
+    const response = await fetch(mediaUrl, {
+      mode: 'cors',
+      credentials: 'omit'
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Failed to download media: ${response.statusText}`)
+    }
+    
+    const blob = await response.blob()
+    
+    // Create a local URL for the blob
+    const localUrl = URL.createObjectURL(blob)
+    
+    console.log(`✅ Downloaded and saved media locally: ${filename}`)
+    return localUrl
+    
+  } catch (error) {
+    console.error('❌ Failed to download media:', error)
+    // Return the original URL as fallback
+    return mediaUrl
+  }
 }
 
 export const useMindMapStore = create<MindMapStore>((set, get) => ({
@@ -102,8 +133,11 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
               ? { ...result.parentUpdated, children: result.children.map(c => c.id) }
               : n
           ),
-          // Add new child nodes
-          ...result.children
+          // Add new child nodes - ensure they are unexplored with dashed borders
+          ...result.children.map(child => ({
+            ...child,
+            isExplored: false  // Force new nodes to be unexplored (dashed borders)
+          }))
         ],
         isGenerating: false,
         loadingNodeId: null,
@@ -201,49 +235,115 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
     set({ 
       isGenerating: true,
       loadingNodeId: nodeId,
-      actionMenu: null
+      actionMenu: null,
+      lastError: null
     })
 
     try {
-      // Mock image generation with test asset
-      const imageNode: ConceptNode = {
+      console.log(`🎨 Real API: Generating image for concept "${parentNode.concept}"`)
+      
+      // Calculate outward position for image node
+      const centerPosition = { x: 600, y: 400 }
+      const parentDistanceFromCenter = Math.sqrt(
+        Math.pow(parentNode.position.x - centerPosition.x, 2) + 
+        Math.pow(parentNode.position.y - centerPosition.y, 2)
+      )
+      
+      // Position image node outward from center, at a distance further than parent
+      const angle = Math.atan2(
+        parentNode.position.y - centerPosition.y,
+        parentNode.position.x - centerPosition.x
+      )
+      const imageDistance = parentDistanceFromCenter + 250 // Proper distance for interaction
+      const imageX = centerPosition.x + Math.cos(angle) * imageDistance
+      const imageY = centerPosition.y + Math.sin(angle) * imageDistance
+
+      // Create temporary loading node with proper dimensions
+      const tempImageNode: ConceptNode = {
         id: `${nodeId}-image-${Date.now()}`,
-        label: `Image: ${parentNode.label}`,
-        concept: `Generated image for ${parentNode.concept}`,
-        isExplored: true,
+        label: `Image: ${parentNode.label}`, // Show final label immediately
+        concept: `Generating image for ${parentNode.concept}`,
+        isExplored: false,
         preferenceScore: 0,
         position: { 
-          x: parentNode.position.x + 200, 
-          y: parentNode.position.y + 100 
+          x: imageX, 
+          y: imageY 
         },
         parentId: nodeId,
         children: [],
         createdAt: new Date(),
         contentType: 'image',
-        contentUrl: '/picture_test_jpg.jpg'
+        contentUrl: null, // This triggers the ImagePlaceholder
+        // Add metadata for consistent sizing
+        metadata: {
+          isGenerating: true,
+          expectedWidth: 180,
+          expectedHeight: 120
+        }
       }
 
+      // Add temporary loading node
       set({
         nodes: [
           ...nodes.map(n => 
             n.id === nodeId 
-              ? { ...n, children: [...n.children, imageNode.id], isExplored: true }
+              ? { ...n, children: [...n.children, tempImageNode.id], isExplored: true }
               : n
           ),
-          imageNode
+          tempImageNode
         ],
-        isGenerating: false,
-        loadingNodeId: null
+        connectionStatus: 'connected'
       })
 
-      console.log(`✅ Generated image node for "${parentNode.label}"`)
+      // Call real API
+      const response = await apiClient.generateMedia({
+        node_id: nodeId,
+        media_type: 'image',
+        prompt: `Generate a high-quality, professional illustration for the concept: "${parentNode.concept}". The image should be educational, clean, and suitable for a knowledge visualization interface. Style: modern, minimalist, informative diagram or illustration.`,
+        node_concept: parentNode.concept
+      })
+
+      if (response.status === 'failed' || response.error) {
+        throw new Error(response.error || 'Image generation failed')
+      }
+
+      if (!response.media_url) {
+        throw new Error('No media URL returned from API')
+      }
+
+      // Download and save the image locally
+      const filename = `generated-image-${nodeId}-${Date.now()}.jpg`
+      const localUrl = await downloadAndSaveMedia(response.media_url, filename)
+
+      // Update the node with the real generated image
+      set({
+        nodes: get().nodes.map(node => 
+          node.id === tempImageNode.id 
+            ? {
+                ...node,
+                label: `Image: ${parentNode.label}`,
+                contentUrl: localUrl,
+                isExplored: false // Make clickable with full menu options
+              }
+            : node
+        ),
+        isGenerating: false,
+        loadingNodeId: null,
+        connectionStatus: 'connected'
+      })
+
+      console.log(`✅ Image generation completed for "${parentNode.label}"`)
       
     } catch (error) {
       console.error('❌ Failed to generate image:', error)
-      set({ 
+      
+      // Remove the temporary loading node on error
+      set({
+        nodes: get().nodes.filter(node => node.id !== tempImageNode.id),
         isGenerating: false,
         loadingNodeId: null,
-        lastError: 'Failed to generate image'
+        connectionStatus: 'error',
+        lastError: error instanceof Error ? error.message : 'Image generation failed'
       })
     }
   },
@@ -258,49 +358,116 @@ export const useMindMapStore = create<MindMapStore>((set, get) => ({
     set({ 
       isGenerating: true,
       loadingNodeId: nodeId,
-      actionMenu: null
+      actionMenu: null,
+      lastError: null
     })
 
     try {
-      // Mock video generation with test asset
-      const videoNode: ConceptNode = {
+      console.log(`🎬 Real API: Generating video for concept "${parentNode.concept}"`)
+      
+      // Calculate outward position for video node
+      const centerPosition = { x: 600, y: 400 }
+      const parentDistanceFromCenter = Math.sqrt(
+        Math.pow(parentNode.position.x - centerPosition.x, 2) + 
+        Math.pow(parentNode.position.y - centerPosition.y, 2)
+      )
+      
+      // Position video node outward from center, at a slightly different angle than image
+      const baseAngle = Math.atan2(
+        parentNode.position.y - centerPosition.y,
+        parentNode.position.x - centerPosition.x
+      )
+      const videoAngle = baseAngle + (Math.PI / 6) // Offset by 30 degrees
+      const videoDistance = parentDistanceFromCenter + 250 // Proper distance for interaction
+      const videoX = centerPosition.x + Math.cos(videoAngle) * videoDistance
+      const videoY = centerPosition.y + Math.sin(videoAngle) * videoDistance
+
+      // Create temporary loading node with proper dimensions
+      const tempVideoNode: ConceptNode = {
         id: `${nodeId}-video-${Date.now()}`,
-        label: `Video: ${parentNode.label}`,
-        concept: `Generated video for ${parentNode.concept}`,
-        isExplored: true,
+        label: `Video: ${parentNode.label}`, // Show final label immediately
+        concept: `Generating video for ${parentNode.concept}`,
+        isExplored: false,
         preferenceScore: 0,
         position: { 
-          x: parentNode.position.x - 200, 
-          y: parentNode.position.y + 100 
+          x: videoX, 
+          y: videoY 
         },
         parentId: nodeId,
         children: [],
         createdAt: new Date(),
         contentType: 'video',
-        contentUrl: '/video_test.mp4'
+        contentUrl: null, // This triggers the ImagePlaceholder
+        // Add metadata for consistent sizing
+        metadata: {
+          isGenerating: true,
+          expectedWidth: 150,
+          expectedHeight: 150
+        }
       }
 
+      // Add temporary loading node
       set({
         nodes: [
           ...nodes.map(n => 
             n.id === nodeId 
-              ? { ...n, children: [...n.children, videoNode.id], isExplored: true }
+              ? { ...n, children: [...n.children, tempVideoNode.id], isExplored: true }
               : n
           ),
-          videoNode
+          tempVideoNode
         ],
-        isGenerating: false,
-        loadingNodeId: null
+        connectionStatus: 'connected'
       })
 
-      console.log(`✅ Generated video node for "${parentNode.label}"`)
+      // Call real API
+      const response = await apiClient.generateMedia({
+        node_id: nodeId,
+        media_type: 'video',
+        prompt: `Create an educational video explaining the concept: "${parentNode.concept}". The video should be informative, engaging, and suitable for learning. Focus on clear explanations and visual demonstrations.`,
+        node_concept: parentNode.concept
+      })
+
+      if (response.status === 'failed' || response.error) {
+        throw new Error(response.error || 'Video generation failed')
+      }
+
+      if (!response.media_url) {
+        throw new Error('No media URL returned from API')
+      }
+
+      // Download and save the video locally
+      const filename = `generated-video-${nodeId}-${Date.now()}.mp4`
+      const localUrl = await downloadAndSaveMedia(response.media_url, filename)
+
+      // Update the node with the real generated video
+      set({
+        nodes: get().nodes.map(node => 
+          node.id === tempVideoNode.id 
+            ? {
+                ...node,
+                label: `Video: ${parentNode.label}`,
+                contentUrl: localUrl,
+                isExplored: false // Make clickable with full menu options
+              }
+            : node
+        ),
+        isGenerating: false,
+        loadingNodeId: null,
+        connectionStatus: 'connected'
+      })
+
+      console.log(`✅ Video generation completed for "${parentNode.label}"`)
       
     } catch (error) {
       console.error('❌ Failed to generate video:', error)
-      set({ 
+      
+      // Remove the temporary loading node on error
+      set({
+        nodes: get().nodes.filter(node => node.id !== tempVideoNode.id),
         isGenerating: false,
         loadingNodeId: null,
-        lastError: 'Failed to generate video'
+        connectionStatus: 'error',
+        lastError: error instanceof Error ? error.message : 'Video generation failed'
       })
     }
   },

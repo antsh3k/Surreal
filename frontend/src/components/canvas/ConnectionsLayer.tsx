@@ -1,12 +1,5 @@
 import { useMemo } from 'react'
 import type { ConceptNode } from '../../types'
-import {
-  getNodeDimensions,
-  getEdgePoint,
-  calculateCurvePath,
-  calculateAngle,
-  type Point
-} from '../../utils/connectionUtils'
 import './ConnectionsLayer.css'
 
 interface ConnectionsLayerProps {
@@ -15,12 +8,20 @@ interface ConnectionsLayerProps {
 
 interface Connection {
   id: string
-  start: Point
-  end: Point
-  parentNode: ConceptNode
-  childNode: ConceptNode
+  from: { x: number; y: number }
+  to: { x: number; y: number }
   isExplored: boolean
-  angle: number
+}
+
+// CRITICAL: node.position IS already the center!
+// ConceptNode renders at: left = node.position.x - offset.x
+// Button center = (node.position.x - offset.x) + offset.x = node.position.x
+// So we use node.position directly - no offset needed!
+const getNodeCenter = (node: ConceptNode) => {
+  return {
+    x: node.position.x,
+    y: node.position.y
+  }
 }
 
 export const ConnectionsLayer = ({ nodes }: ConnectionsLayerProps) => {
@@ -31,25 +32,14 @@ export const ConnectionsLayer = ({ nodes }: ConnectionsLayerProps) => {
       if (node.parentId) {
         const parent = nodes.find(n => n.id === node.parentId)
         if (parent) {
-          // Calculate angle from parent to child
-          const angle = calculateAngle(parent.position, node.position)
-          
-          // Get dimensions for both nodes
-          const parentDims = getNodeDimensions(parent)
-          const childDims = getNodeDimensions(node)
-          
-          // Calculate edge intersection points (edge-to-edge, not center-to-center)
-          const startPoint = getEdgePoint(parent.position, parentDims, angle)
-          const endPoint = getEdgePoint(node.position, childDims, angle + Math.PI)
+          const from = getNodeCenter(parent)
+          const to = getNodeCenter(node)
           
           links.push({
             id: `${parent.id}-${node.id}`,
-            start: startPoint,
-            end: endPoint,
-            parentNode: parent,
-            childNode: node,
-            isExplored: node.isExplored,
-            angle
+            from,
+            to,
+            isExplored: node.isExplored
           })
         }
       }
@@ -58,111 +48,70 @@ export const ConnectionsLayer = ({ nodes }: ConnectionsLayerProps) => {
     return links
   }, [nodes])
 
+  if (connections.length === 0) return null
+
+  // Create a stable key that changes when connections actually change
+  const connectionKey = `${nodes.length}-${connections.length}-${connections.map(c => c.id).join('-')}`
+
   return (
     <svg 
-      className="absolute inset-0 pointer-events-none z-[5] overflow-visible"
-      style={{ width: '100%', height: '100%' }}
+      key={connectionKey}
+      className="connections-layer"
+      style={{ 
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        pointerEvents: 'none',
+        zIndex: 5,
+        overflow: 'visible'
+      }}
     >
-      <defs>
-        {/* Gradient for explored connections */}
-        <linearGradient id="connection-gradient-explored" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.8" />
-          <stop offset="100%" stopColor="#60a5fa" stopOpacity="0.9" />
-        </linearGradient>
-        
-        {/* Gradient for unexplored connections */}
-        <linearGradient id="connection-gradient-unexplored" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#94a3b8" stopOpacity="0.6" />
-          <stop offset="100%" stopColor="#cbd5e1" stopOpacity="0.7" />
-        </linearGradient>
-        
-        {/* Arrowhead for explored connections - solid blue */}
-        <marker
-          id="arrowhead-explored"
-          markerWidth="12"
-          markerHeight="8"
-          refX="11"
-          refY="4"
-          orient="auto"
-          markerUnits="strokeWidth"
-        >
-          <path d="M 0 0 L 12 4 L 0 8 Z" fill="#3b82f6" />
-        </marker>
-        
-        {/* Arrowhead for unexplored connections - lighter gray */}
-        <marker
-          id="arrowhead-unexplored"
-          markerWidth="12"
-          markerHeight="8"
-          refX="11"
-          refY="4"
-          orient="auto"
-          markerUnits="strokeWidth"
-        >
-          <path d="M 0 0 L 12 4 L 0 8 Z" fill="#94a3b8" />
-        </marker>
-        
-        {/* Glow filter for hover/emphasis effects */}
-        <filter id="connection-glow">
-          <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
-          <feMerge>
-            <feMergeNode in="coloredBlur"/>
-            <feMergeNode in="SourceGraphic"/>
-          </feMerge>
-        </filter>
-      </defs>
-      
       {connections.map(link => {
-        // Create smooth bezier path using intelligent control points
-        const path = calculateCurvePath(
-          link.start,
-          link.end,
-          link.angle,
-          link.angle + Math.PI
-        )
-        
-        // Dynamic styling based on node state
-        const strokeWidth = link.isExplored ? 2.5 : 2
-        const strokeDasharray = link.isExplored ? 'none' : '8,4'
-        const markerEnd = link.isExplored ? 'url(#arrowhead-explored)' : 'url(#arrowhead-unexplored)'
-        const gradient = link.isExplored ? 'url(#connection-gradient-explored)' : 'url(#connection-gradient-unexplored)'
-        const connectionClass = link.isExplored ? 'connection-explored' : 'connection-unexplored'
+        // Validate connection points
+        if (!link.from || !link.to || 
+            typeof link.from.x !== 'number' || typeof link.from.y !== 'number' ||
+            typeof link.to.x !== 'number' || typeof link.to.y !== 'number') {
+          return null
+        }
 
+        const dx = link.to.x - link.from.x
+        const dy = link.to.y - link.from.y
+        const distance = Math.sqrt(dx * dx + dy * dy)
+        
+        // Handle edge case: if nodes are at same position, draw straight line
+        let path: string
+        if (distance < 1 || !isFinite(distance)) {
+          path = `M ${link.from.x} ${link.from.y} L ${link.to.x} ${link.to.y}`
+        } else {
+          // Simple curve: just add a small offset for visual appeal
+          const curveOffset = Math.min(distance * 0.15, 40)
+          const midX = (link.from.x + link.to.x) / 2
+          const midY = (link.from.y + link.to.y) / 2
+          
+          // Perpendicular offset for curve (avoid division by zero)
+          const perpX = distance > 0 ? -dy / distance * curveOffset : 0
+          const perpY = distance > 0 ? dx / distance * curveOffset : 0
+          
+          const controlX = midX + perpX
+          const controlY = midY + perpY
+          
+          // Simple quadratic bezier (smoother than straight, simpler than cubic)
+          path = `M ${link.from.x} ${link.from.y} Q ${controlX} ${controlY} ${link.to.x} ${link.to.y}`
+        }
+        
         return (
-          <g key={link.id} className="connection-group">
-            {/* Wide invisible hit area for potential future interactions */}
-            <path
-              d={path}
-              fill="none"
-              stroke="transparent"
-              strokeWidth="20"
-              className="pointer-events-none"
-            />
-            
-            {/* Darker gray shadow/outline for better contrast */}
-            <path
-              d={path}
-              fill="none"
-              stroke="#9ca3af"
-              strokeWidth={strokeWidth + 2}
-              strokeOpacity="1"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            
-            {/* Main connection line with gradient and animations */}
-            <path
-              d={path}
-              fill="none"
-              stroke={gradient}
-              strokeWidth={strokeWidth}
-              strokeDasharray={strokeDasharray}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              markerEnd={markerEnd}
-              className={`connection-path ${connectionClass}`}
-            />
-          </g>
+          <path
+            key={link.id}
+            d={path}
+            fill="none"
+            stroke={link.isExplored ? '#3b82f6' : '#9ca3af'}
+            strokeWidth={link.isExplored ? 2.5 : 2}
+            strokeDasharray={link.isExplored ? 'none' : '6,4'}
+            strokeLinecap="round"
+            className={link.isExplored ? 'connection-explored' : 'connection-unexplored'}
+          />
         )
       })}
     </svg>

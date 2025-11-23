@@ -35,7 +35,7 @@ export const StatusBar = ({ nodeCount, isGenerating, centerConcept }: StatusBarP
 
         {/* Help */}
         <div className="text-xs text-gray-500 hidden sm:block">
-          💡 Dashed = unexplored • Solid = explored
+          Dashed = unexplored • Solid = explored
         </div>
       </div>
     </div>

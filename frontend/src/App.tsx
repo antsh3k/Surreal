@@ -7,8 +7,6 @@ import { ConceptNode } from './components/nodes/ConceptNode'
 import { LoadingNode } from './components/nodes/LoadingNode'
 import { InfoPanel } from './components/nodes/InfoPanel'
 import { StatusBar } from './components/ui/StatusBar'
-import { ReactBitsTest } from './components/test/ReactBitsTest'
-import { ApiConnectionTest } from './components/test/ApiConnectionTest'
 
 export default function App() {
   const {
@@ -34,6 +32,39 @@ export default function App() {
     testConnection
   } = useMindMapStore()
 
+  // Smart panel positioning logic - like arrow positioning from InitialPrompt
+  const calculateSmartPanelPosition = (
+    nodePosition: { x: number; y: number },
+    panelWidth: number,
+    panelHeight: number
+  ) => {
+    const padding = 20
+    const arrowOffset = 50 // Distance from node like arrow in InitialPrompt
+    
+    // Try to position panel to the right of the node first
+    let x = nodePosition.x + arrowOffset
+    let y = nodePosition.y - panelHeight / 2
+    
+    // If panel would go off right edge, position to the left
+    if (x + panelWidth + padding > window.innerWidth) {
+      x = nodePosition.x - arrowOffset - panelWidth
+    }
+    
+    // If panel would go off left edge, center horizontally
+    if (x < padding) {
+      x = nodePosition.x - panelWidth / 2
+    }
+    
+    // Adjust vertical position if needed
+    if (y < padding) {
+      y = padding
+    } else if (y + panelHeight + padding > window.innerHeight) {
+      y = window.innerHeight - panelHeight - padding
+    }
+    
+    return { x: Math.max(padding, x), y: Math.max(padding, y) }
+  }
+
   // Handle node click interactions
   const handleNodeClick = async (nodeId: string) => {
     const node = nodes.find(n => n.id === nodeId)
@@ -49,17 +80,13 @@ export default function App() {
     }
 
     if (node.isExplored) {
-      // Open info panel for explored nodes - position it to the right of the node
-      openInfoPanel(nodeId, {
-        x: Math.min(window.innerWidth - 350, node.position.x + 180), // Keep panel on screen
-        y: Math.max(50, node.position.y - 50) // Position above the node
-      })
+      // Open info panel for explored nodes - smart positioning like arrow
+      const panelPosition = calculateSmartPanelPosition(node.position, 350, 400)
+      openInfoPanel(nodeId, panelPosition)
     } else {
-      // Show action menu for unexplored nodes
-      showActionMenu(nodeId, {
-        x: Math.min(window.innerWidth - 200, node.position.x + 100),
-        y: Math.max(50, node.position.y - 50)
-      })
+      // Show action menu for unexplored nodes - smart positioning like arrow
+      const menuPosition = calculateSmartPanelPosition(node.position, 180, 140)
+      showActionMenu(nodeId, menuPosition)
     }
   }
 
@@ -89,8 +116,7 @@ export default function App() {
 
   // Handle node hover - disabled to prevent render thrashing
   // Hover events trigger too frequently and cause connections to flicker
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleNodeHover = async (nodeId: string, isHovered: boolean) => {
+  const handleNodeHover = async (_nodeId: string, _isHovered: boolean) => {
     // No-op: hover tracking disabled for performance
     // Only track meaningful interactions (click, expand)
   }
@@ -193,13 +219,6 @@ export default function App() {
         />
       )}
 
-      {/* Debug Tools */}
-      {import.meta.env.DEV && (
-        <>
-          <ReactBitsTest />
-          <ApiConnectionTest />
-        </>
-      )}
     </div>
   )
 }

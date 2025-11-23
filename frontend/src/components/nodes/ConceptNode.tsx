@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import type { ConceptNode as ConceptNodeType } from '../../types'
+import { ImagePlaceholder } from '../ui/ImagePlaceholder'
 
 interface ConceptNodeProps {
   node: ConceptNodeType
@@ -93,10 +94,12 @@ export const ConceptNode = ({
     }
     
     if (isMediaNode) {
-      // Media nodes have dynamic size based on aspect ratio, black border, no padding
+      // Media nodes have dynamic size based on aspect ratio, follow exploration state
+      const borderStyle = node.isExplored ? 'border-solid' : 'border-dashed'
+      const borderColor = node.isExplored ? 'border-black' : 'border-gray-600'
       return `
-        rounded-lg border-2 border-black border-solid bg-white shadow-sm transition-all duration-200 ease-out
-        overflow-hidden p-0
+        rounded-lg border-3 ${borderColor} ${borderStyle} bg-white shadow-lg transition-all duration-200 ease-out
+        overflow-hidden p-0 hover:shadow-xl hover:scale-105
         ${className}
       `
     }
@@ -151,45 +154,58 @@ export const ConceptNode = ({
       ) : (
         <div>
           {/* Media-only content for image/video nodes */}
-          {node.contentType === 'image' && node.contentUrl ? (
-            <img 
-              src={node.contentUrl} 
-              alt={node.label}
-              className="object-cover rounded-lg"
-              style={{
-                width: mediaDimensions?.width || 128,
-                height: mediaDimensions?.height || 128
-              }}
-              onError={(e) => {
-                console.warn(`Failed to load image: ${node.contentUrl}`)
-                e.currentTarget.style.display = 'none'
-              }}
-            />
-          ) : node.contentType === 'video' && node.contentUrl ? (
-            <video 
-              src={node.contentUrl} 
-              className="object-cover rounded-lg"
-              style={{
-                width: mediaDimensions?.width || 128,
-                height: mediaDimensions?.height || 128
-              }}
-              muted
-              onError={(e) => {
-                console.warn(`Failed to load video: ${node.contentUrl}`)
-                e.currentTarget.style.display = 'none'
-              }}
-            />
+          {node.contentType === 'image' ? (
+            node.contentUrl ? (
+              <img 
+                src={node.contentUrl} 
+                alt={node.label}
+                className="object-cover rounded-lg"
+                style={{
+                  width: mediaDimensions?.width || 128,
+                  height: mediaDimensions?.height || 128
+                }}
+                onError={(e) => {
+                  console.warn(`Failed to load image: ${node.contentUrl}`)
+                  e.currentTarget.style.display = 'none'
+                }}
+              />
+            ) : (
+              /* Show image placeholder while generating */
+              <ImagePlaceholder 
+                width={node.metadata?.expectedWidth || mediaDimensions?.width || 180}
+                height={node.metadata?.expectedHeight || mediaDimensions?.height || 120}
+                text="Generating image..."
+              />
+            )
+          ) : node.contentType === 'video' ? (
+            node.contentUrl ? (
+              <video 
+                src={node.contentUrl} 
+                className="object-cover rounded-lg"
+                style={{
+                  width: mediaDimensions?.width || 128,
+                  height: mediaDimensions?.height || 128
+                }}
+                muted
+                onError={(e) => {
+                  console.warn(`Failed to load video: ${node.contentUrl}`)
+                  e.currentTarget.style.display = 'none'
+                }}
+              />
+            ) : (
+              /* Show video placeholder while generating */
+              <ImagePlaceholder 
+                width={node.metadata?.expectedWidth || mediaDimensions?.width || 150}
+                height={node.metadata?.expectedHeight || mediaDimensions?.height || 150}
+                text="Generating video..."
+              />
+            )
           ) : (
-            /* Text content for regular nodes - use CONCEPT not label */
-            <div>
+            /* Text content for regular nodes - clean API-relevant info only */
+            <div className="text-center">
               <span className={`text-sm font-medium ${node.id === 'center' ? 'text-blue-600' : 'text-gray-900'}`}>
                 {node.concept.length > 35 ? `${node.concept.slice(0, 32)}...` : node.concept}
               </span>
-              
-              {/* Simple state indicator - hide for center node */}
-              {!node.isExplored && node.id !== 'center' && (
-                <div className="text-xs text-gray-500 mt-1">Click to explore</div>
-              )}
             </div>
           )}
         </div>
@@ -230,10 +246,11 @@ export const ConceptNode = ({
         className={`
           ${getNodeClasses()}
           ${isLoading ? 'cursor-wait' : 'cursor-pointer'}
-          hover:shadow-lg
+          ${isMediaNode ? 'hover:shadow-xl' : 'hover:shadow-lg'}
           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
           disabled:cursor-not-allowed
           pointer-events-auto
+          ${isMediaNode ? 'z-[20]' : ''}
         `}
         style={isMediaNode && mediaDimensions ? {
           width: mediaDimensions.width,

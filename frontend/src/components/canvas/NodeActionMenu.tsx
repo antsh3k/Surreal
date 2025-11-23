@@ -48,20 +48,48 @@ export const NodeActionMenu = ({
     onClose()
   }
 
-  // Adjust menu position to stay within screen bounds
-  const adjustedPosition = {
-    x: Math.min(position.x, window.innerWidth - 200),
-    y: Math.min(position.y, window.innerHeight - 160)
+  // Smart positioning logic - place menu near node like an arrow tooltip
+  const calculateOptimalPosition = () => {
+    const menuWidth = 180
+    const menuHeight = 140
+    const padding = 20
+    const arrowOffset = 40 // Position menu like arrow from node
+    
+    // Try to position menu to the right of the node first
+    let x = position.x + arrowOffset
+    let y = position.y - menuHeight / 2
+    
+    // If menu would go off right edge, position to the left
+    if (x + menuWidth + padding > window.innerWidth) {
+      x = position.x - arrowOffset - menuWidth
+    }
+    
+    // If menu would go off left edge, center horizontally
+    if (x < padding) {
+      x = position.x - menuWidth / 2
+    }
+    
+    // Adjust vertical position if needed
+    if (y < padding) {
+      y = padding
+    } else if (y + menuHeight + padding > window.innerHeight) {
+      y = window.innerHeight - menuHeight - padding
+    }
+    
+    return { x: Math.max(padding, x), y: Math.max(padding, y) }
   }
+  
+  const adjustedPosition = calculateOptimalPosition()
 
   return (
     <div 
       ref={menuRef}
-      className="fixed z-50 bg-white rounded-lg shadow-xl border border-gray-200 p-3"
+      className="fixed z-50 bg-white rounded-lg shadow-2xl border border-gray-300 p-3 backdrop-blur-sm bg-opacity-95"
       style={{
         left: adjustedPosition.x,
         top: adjustedPosition.y,
-        animation: 'fadeIn 0.2s ease-out'
+        animation: 'fadeIn 0.2s ease-out',
+        transform: 'translateZ(0)' // Force hardware acceleration
       }}
     >
       <div className="flex flex-col space-y-2 min-w-[160px]">

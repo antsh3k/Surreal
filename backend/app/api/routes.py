@@ -760,18 +760,22 @@ async def generate_media(request: GenerateMediaRequest) -> GenerateMediaResponse
     **On-demand only**: This endpoint is called when the user explicitly requests
     media generation for a node (e.g., clicks on an explored node to generate content).
 
-    **Async behavior**:
-    - If `wait_for_completion=False` (default): Returns task_id immediately for polling
-    - If `wait_for_completion=True`: Waits for generation to complete (may take 4-10 minutes for video)
+    **Image generation (SYNCHRONOUS)**:
+    - Images are generated synchronously and returned immediately
+    - No task_id is returned (images are ready in the response)
+    - Status is always "completed" if successful
+    - Typical time: 30-60 seconds
 
-    **Media types**:
-    - `image`: Generates a visual representation of the concept (1-2 minutes)
-    - `video`: Generates a short explainer video (4-10 minutes depending on duration)
+    **Video generation (ASYNCHRONOUS)**:
+    - Videos are generated asynchronously
+    - Returns task_id for polling via /media-status
+    - If `wait_for_completion=False` (default): Returns task_id immediately
+    - If `wait_for_completion=True`: Waits for completion (may take 4-10 minutes)
 
     **Time estimates**:
-    - Image generation: ~1-2 minutes
-    - Video (6s): ~4-5 minutes
-    - Video (10s): ~8-9 minutes
+    - Image generation: ~30-60 seconds (synchronous)
+    - Video (6s): ~4-5 minutes (async, requires polling)
+    - Video (10s): ~8-9 minutes (async, requires polling)
     """
     log_api_call("/api/generate-media", node_id=request.node_id, media_type=request.media_type)
 
@@ -787,64 +791,77 @@ async def generate_media(request: GenerateMediaRequest) -> GenerateMediaResponse
         )
 
         if request.media_type == "image":
-            if request.wait_for_completion:
-                # Generate and wait for completion
-                media_url = await minimax_service.generate_and_wait_image(
-                    prompt=prompt,
-                    aspect_ratio=request.aspect_ratio,
-                )
+            # Image generation is SYNCHRONOUS (unlike videos)
+            # It returns images directly, not a task_id for polling
+            result = await minimax_service.generate_image(
+                prompt=prompt,
+                aspect_ratio=request.aspect_ratio,
+                response_format="url",  # Use URL format for direct access
+            )
 
-                if media_url:
+            logger.info(f"Image generation service returned: {result}")
+
+            if result and "error" not in result:
+                images = result.get("images", [])
+                if images:
+                    # Images are generated synchronously, so they're already completed
+                    logger.info(f"Image generation successful for node {request.node_id}: {images[0]}")
                     return GenerateMediaResponse(
                         node_id=request.node_id,
                         media_type="image",
                         status="completed",
-                        task_id=None,
-                        media_url=media_url,
-                        error=None,
-                        elapsed_time=None,  # Calculated in service
-                        updated_node=None,  # Frontend will update node metadata
-                    )
-                else:
-                    return GenerateMediaResponse(
-                        node_id=request.node_id,
-                        media_type="image",
-                        status="failed",
-                        task_id=None,
-                        media_url=None,
-                        error="Image generation failed",
-                        elapsed_time=None,
-                        updated_node=None,
-                    )
-            else:
-                # Start async generation
-                task_result = await minimax_service.generate_image(
-                    prompt=prompt,
-                    aspect_ratio=request.aspect_ratio,
-                )
-
-                if task_result and "task_id" in task_result:
-                    return GenerateMediaResponse(
-                        node_id=request.node_id,
-                        media_type="image",
-                        status="pending",
-                        task_id=task_result["task_id"],
-                        media_url=None,
+                        task_id=None,  # No task_id for synchronous operations
+                        media_url=images[0],  # Return first image URL
                         error=None,
                         elapsed_time=None,
                         updated_node=None,
                     )
-                else:
-                    return GenerateMediaResponse(
-                        node_id=request.node_id,
-                        media_type="image",
-                        status="failed",
-                        task_id=None,
-                        media_url=None,
-                        error="Failed to start image generation",
-                        elapsed_time=None,
-                        updated_node=None,
-                    )
+            
+            # Handle error with detailed diagnostics
+            error_msg = result.get("error", "Failed to generate image") if result else "No response from service"
+            error_type = result.get("error_type", "unknown") if result else "no_response"
+            diagnostic = result.get("diagnostic", {}) if result else {}
+            
+            # Build comprehensive error message
+            detailed_error = error_msg
+            
+            # Add HTTP status code if available
+            if result and "status_code" in result:
+                http_status = result["status_code"]
+                detailed_error = f"[HTTP {http_status}] {error_msg}"
+            
+            # Add diagnostic information to error message for user visibility
+            diagnostic_parts = []
+            if diagnostic:
+                if "api_status_code" in diagnostic:
+                    diagnostic_parts.append(f"API Status: {diagnostic['api_status_code']}")
+                if "api_status_msg" in diagnostic:
+                    diagnostic_parts.append(f"Message: {diagnostic['api_status_msg']}")
+                if "api_key_configured" in diagnostic and not diagnostic.get("api_key_configured"):
+                    diagnostic_parts.append("⚠️ API key not configured")
+                if "endpoint" in diagnostic:
+                    diagnostic_parts.append(f"Endpoint: {diagnostic['endpoint']}")
+            
+            if diagnostic_parts:
+                detailed_error = f"{detailed_error} ({'; '.join(diagnostic_parts)})"
+            
+            # Log full diagnostic information
+            logger.error(
+                f"Image generation failed for node {request.node_id} - "
+                f"Error: {error_msg}, Type: {error_type}, "
+                f"Full diagnostic: {diagnostic}"
+            )
+            
+            return GenerateMediaResponse(
+                node_id=request.node_id,
+                media_type="image",
+                status="failed",
+                task_id=None,
+                media_url=None,
+                error=detailed_error,
+                elapsed_time=None,
+                updated_node=None,
+            )
 
         elif request.media_type == "video":
             if request.wait_for_completion:
@@ -856,6 +873,7 @@ async def generate_media(request: GenerateMediaRequest) -> GenerateMediaResponse
                 )
 
                 if media_url:
+                    logger.info(f"Video generation completed for node {request.node_id}: {media_url}")
                     return GenerateMediaResponse(
                         node_id=request.node_id,
                         media_type="video",
@@ -867,13 +885,18 @@ async def generate_media(request: GenerateMediaRequest) -> GenerateMediaResponse
                         updated_node=None,
                     )
                 else:
+                    error_msg = "Video generation failed or timed out"
+                    logger.error(
+                        f"Video generation failed for node {request.node_id} "
+                        f"(wait_for_completion=True) - No media URL returned"
+                    )
                     return GenerateMediaResponse(
                         node_id=request.node_id,
                         media_type="video",
                         status="failed",
                         task_id=None,
                         media_url=None,
-                        error="Video generation failed",
+                        error=error_msg,
                         elapsed_time=None,
                         updated_node=None,
                     )
@@ -885,6 +908,7 @@ async def generate_media(request: GenerateMediaRequest) -> GenerateMediaResponse
                     resolution=request.resolution,
                 )
 
+                # Check if we got a successful response with task_id
                 if task_result and "task_id" in task_result:
                     return GenerateMediaResponse(
                         node_id=request.node_id,
@@ -897,13 +921,59 @@ async def generate_media(request: GenerateMediaRequest) -> GenerateMediaResponse
                         updated_node=None,
                     )
                 else:
+                    # Extract error message with detailed diagnostics
+                    error_msg = "Failed to start video generation"
+                    error_type = "unknown"
+                    diagnostic = {}
+                    
+                    if task_result:
+                        if "error" in task_result:
+                            error_msg = task_result["error"]
+                            error_type = task_result.get("error_type", "unknown")
+                            diagnostic = task_result.get("diagnostic", {})
+                        else:
+                            # Log the full response for debugging
+                            logger.warning(f"Unexpected video generation response: {task_result}")
+                            error_msg = f"Unexpected response format: missing task_id"
+                            diagnostic = {"response_keys": list(task_result.keys()) if isinstance(task_result, dict) else "not_dict"}
+                    else:
+                        error_msg = "Video generation service returned no response"
+                        error_type = "no_response"
+                    
+                    # Build comprehensive error message
+                    detailed_error = error_msg
+                    diagnostic_parts = []
+                    
+                    if diagnostic:
+                        if "api_status_code" in diagnostic:
+                            diagnostic_parts.append(f"API Status: {diagnostic['api_status_code']}")
+                        if "api_status_msg" in diagnostic:
+                            diagnostic_parts.append(f"Message: {diagnostic['api_status_msg']}")
+                        if "api_key_configured" in diagnostic and not diagnostic.get("api_key_configured"):
+                            diagnostic_parts.append("⚠️ API key not configured")
+                        if "endpoint" in diagnostic:
+                            diagnostic_parts.append(f"Endpoint: {diagnostic['endpoint']}")
+                    
+                    if task_result and "status_code" in task_result:
+                        http_status = task_result["status_code"]
+                        detailed_error = f"[HTTP {http_status}] {error_msg}"
+                    
+                    if diagnostic_parts:
+                        detailed_error = f"{detailed_error} ({'; '.join(diagnostic_parts)})"
+                    
+                    logger.error(
+                        f"Video generation failed for node {request.node_id} - "
+                        f"Error: {error_msg}, Type: {error_type}, "
+                        f"Full diagnostic: {diagnostic}"
+                    )
+                    
                     return GenerateMediaResponse(
                         node_id=request.node_id,
                         media_type="video",
                         status="failed",
                         task_id=None,
                         media_url=None,
-                        error="Failed to start video generation",
+                        error=detailed_error,
                         elapsed_time=None,
                         updated_node=None,
                     )
@@ -914,11 +984,20 @@ async def generate_media(request: GenerateMediaRequest) -> GenerateMediaResponse
                 detail=f"Invalid media_type: {request.media_type}",
             )
 
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
-        logger.error(f"Error generating media: {str(e)}")
+        error_type = type(e).__name__
+        error_msg = str(e)
+        logger.error(
+            f"Unexpected error generating media for node {request.node_id}: "
+            f"{error_type} - {error_msg}",
+            exc_info=True
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate media: {str(e)}",
+            detail=f"Failed to generate media: {error_type} - {error_msg}. Check server logs for details.",
         )
 
 
@@ -929,19 +1008,29 @@ async def check_media_status(request: CheckMediaStatusRequest) -> CheckMediaStat
 
     **Polling endpoint**: Used to check the progress of async media generation.
 
+    **NOTE**: Image generation is SYNCHRONOUS and does not support status polling.
+    This endpoint only works for videos.
+
     **Status values**:
     - `pending`: Task is queued
     - `generating`: Generation in progress
     - `completed`: Media is ready, URL available
     - `failed`: Generation failed, error message available
 
-    **Usage pattern**:
+    **Usage pattern** (videos only):
     1. Call /generate-media with wait_for_completion=False
     2. Get task_id from response
     3. Poll /media-status every 10-30 seconds until status is completed or failed
     4. Update node metadata with media_url when completed
     """
     log_api_call("/api/media-status", task_id=request.task_id, media_type=request.media_type)
+
+    # Reject image status checks since images are synchronous
+    if request.media_type == "image":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Image generation is synchronous and does not support status polling. Images are returned immediately from /generate-media."
+        )
 
     try:
         # Check task status
@@ -951,9 +1040,47 @@ async def check_media_status(request: CheckMediaStatusRequest) -> CheckMediaStat
         )
 
         if not status_result:
+            logger.error(
+                f"Status check failed for task {request.task_id} - "
+                f"No response from service"
+            )
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Task {request.task_id} not found or status check failed",
+                detail=f"Task {request.task_id} not found or status check failed. Check server logs for details.",
+            )
+
+        # Check if status_result contains an error
+        if "error" in status_result:
+            error_msg = status_result.get("error", "Unknown error")
+            error_type = status_result.get("error_type", "unknown")
+            diagnostic = status_result.get("diagnostic", {})
+            
+            logger.error(
+                f"Status check error for task {request.task_id} - "
+                f"Error: {error_msg}, Type: {error_type}, "
+                f"Diagnostic: {diagnostic}"
+            )
+            
+            # Build detailed error message
+            detailed_error = error_msg
+            if diagnostic:
+                diagnostic_parts = []
+                if "api_status_code" in diagnostic:
+                    diagnostic_parts.append(f"API Status: {diagnostic['api_status_code']}")
+                if "api_status_msg" in diagnostic:
+                    diagnostic_parts.append(f"Message: {diagnostic['api_status_msg']}")
+                if diagnostic_parts:
+                    detailed_error = f"{error_msg} ({'; '.join(diagnostic_parts)})"
+            
+            return CheckMediaStatusResponse(
+                task_id=request.task_id,
+                node_id=request.node_id,
+                media_type=request.media_type,
+                status="failed",
+                media_url=None,
+                progress=None,
+                error=detailed_error,
+                updated_node=None,
             )
 
         task_status = status_result.get("status", "unknown")
@@ -965,12 +1092,18 @@ async def check_media_status(request: CheckMediaStatusRequest) -> CheckMediaStat
             status_mapped = "pending"
         elif task_status in ["generating", "processing"]:
             status_mapped = "generating"
-        elif task_status == "completed":
+        elif task_status in ["completed", "success"]:
             status_mapped = "completed"
         elif task_status == "failed":
             status_mapped = "failed"
         else:
             status_mapped = "pending"
+            logger.warning(f"Unknown task status '{task_status}' for task {request.task_id}")
+
+        logger.debug(
+            f"Status check for task {request.task_id}: {status_mapped} "
+            f"(media_url={'present' if media_url else 'none'})"
+        )
 
         return CheckMediaStatusResponse(
             task_id=request.task_id,
@@ -986,8 +1119,14 @@ async def check_media_status(request: CheckMediaStatusRequest) -> CheckMediaStat
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error checking media status: {str(e)}")
+        error_type = type(e).__name__
+        error_msg = str(e)
+        logger.error(
+            f"Unexpected error checking media status for task {request.task_id}: "
+            f"{error_type} - {error_msg}",
+            exc_info=True
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to check media status: {str(e)}",
+            detail=f"Failed to check media status: {error_type} - {error_msg}. Check server logs for details.",
         )

@@ -1,8 +1,11 @@
 import type { ConceptNode } from '../types'
 import type { BackendNode, GraphContext } from '../types/api'
 import type { MindMapState } from '../types'
+import { CURRENT_LAYOUT, type LayoutOption } from '../config/layoutConfig'
 
 export class NodeAdapter {
+  // Configuration for layout testing - easy to switch between options
+  private static LAYOUT_OPTION: LayoutOption = CURRENT_LAYOUT
   static fromBackend(backendNode: any): ConceptNode {
     return {
       id: backendNode.id,
@@ -63,7 +66,7 @@ export class NodeAdapter {
 
     // Apply canvas positioning to all nodes
     const allNodes = [centerNode, ...initialNodes]
-    const positionedNodes = this.calculateCanvasPositions(allNodes)
+    const positionedNodes = this.calculateCanvasPositions(allNodes, { x: 600, y: 400 }, this.LAYOUT_OPTION)
 
     return {
       centerNode: positionedNodes.find(n => n.id === centerNode.id) || centerNode,
@@ -105,9 +108,33 @@ export class NodeAdapter {
     }
   }
 
+  // Layout Options for Initial Nodes
+  private static getLayoutOption1_Compass(siblingIndex: number): { angle: number; radius: number } {
+    const compassAngles = [-Math.PI / 2, 0, Math.PI / 2, Math.PI] // Top, Right, Bottom, Left
+    return { angle: compassAngles[siblingIndex % 4], radius: 300 }
+  }
+
+  private static getLayoutOption2_Diamond(siblingIndex: number): { angle: number; radius: number } {
+    const diamondAngles = [-Math.PI / 4, Math.PI / 4, 3 * Math.PI / 4, -3 * Math.PI / 4] // NE, SE, SW, NW
+    return { angle: diamondAngles[siblingIndex % 4], radius: 280 }
+  }
+
+  private static getLayoutOption3_Asymmetric(siblingIndex: number): { angle: number; radius: number } {
+    const asymmetricAngles = [(-Math.PI / 2) + 0.26, 0 + 0.26, (Math.PI / 2) + 0.26, Math.PI + 0.26] // 15° offset from cardinal
+    return { angle: asymmetricAngles[siblingIndex % 4], radius: 320 }
+  }
+
+  private static getLayoutOption4_Progressive(siblingIndex: number, conceptLength: number): { angle: number; radius: number } {
+    const compassAngles = [-Math.PI / 2, 0, Math.PI / 2, Math.PI]
+    const baseRadius = 280
+    const radiusAdjustment = Math.min(60, conceptLength * 1.5) // Longer names get more space
+    return { angle: compassAngles[siblingIndex % 4], radius: baseRadius + radiusAdjustment }
+  }
+
   static calculateCanvasPositions(
     nodes: ConceptNode[],
-    centerPosition: { x: number; y: number } = { x: 600, y: 400 }
+    centerPosition: { x: number; y: number } = { x: 600, y: 400 },
+    layoutOption: 'compass' | 'diamond' | 'asymmetric' | 'progressive' = 'compass'
   ): ConceptNode[] {
     return nodes.map(node => {
       if (node.id.includes('center')) {
@@ -120,14 +147,31 @@ export class NodeAdapter {
           .filter(n => n.parentId === node.parentId)
           .findIndex(n => n.id === node.id)
         
-        const angle = (siblingIndex * 2 * Math.PI) / 4 // Assume 4 initial nodes
-        const radius = 200
+        // Get layout configuration based on selected option
+        let layout: { angle: number; radius: number }
+        
+        switch (layoutOption) {
+          case 'compass':
+            layout = this.getLayoutOption1_Compass(siblingIndex)
+            break
+          case 'diamond':
+            layout = this.getLayoutOption2_Diamond(siblingIndex)
+            break
+          case 'asymmetric':
+            layout = this.getLayoutOption3_Asymmetric(siblingIndex)
+            break
+          case 'progressive':
+            layout = this.getLayoutOption4_Progressive(siblingIndex, node.concept.length)
+            break
+          default:
+            layout = this.getLayoutOption1_Compass(siblingIndex)
+        }
         
         return {
           ...node,
           position: {
-            x: centerPosition.x + Math.cos(angle) * radius,
-            y: centerPosition.y + Math.sin(angle) * radius
+            x: centerPosition.x + Math.cos(layout.angle) * layout.radius,
+            y: centerPosition.y + Math.sin(layout.angle) * layout.radius
           }
         }
       }

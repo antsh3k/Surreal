@@ -97,7 +97,7 @@ function getRadialDirection(parentPosition: Position, centerPosition: Position =
   return Math.atan2(dy, dx)
 }
 
-// Calculate positions for child nodes using radial with avoidance approach
+// Calculate positions for child nodes using radial with OUTWARD expansion
 export function calculateRadialChildPositions(
   parentPosition: Position,
   childCount: number,
@@ -108,11 +108,15 @@ export function calculateRadialChildPositions(
   
   const positions: Position[] = []
   
-  // Get the radial direction from center through parent
+  // Get the radial direction from center through parent for OUTWARD expansion
   const centerPosition = CENTER_POSITION
+  const parentDistanceFromCenter = getDistance(parentPosition, centerPosition)
   const preferredDirection = getRadialDirection(parentPosition, centerPosition)
   
-  // Try to place children in the preferred radial direction first
+  // Calculate radius for OUTWARD expansion - children should be further from center than parent
+  const minOutwardRadius = Math.max(baseRadius, parentDistanceFromCenter + baseRadius * 0.7)
+  
+  // Try to place children in the preferred radial direction first (OUTWARD)
   const candidateAngles: number[] = []
   
   // Start with the preferred direction and add variations
@@ -122,9 +126,9 @@ export function calculateRadialChildPositions(
     candidateAngles.push(preferredDirection + angleVariation)
   }
   
-  // Try different radii and find positions that don't collide
+  // Try different radii starting from minimum outward radius and find positions that don't collide
   for (let radiusMultiplier = 1; radiusMultiplier <= 3; radiusMultiplier++) {
-    const radius = baseRadius * radiusMultiplier
+    const radius = minOutwardRadius * radiusMultiplier
     positions.length = 0 // Reset positions
     
     for (let i = 0; i < childCount; i++) {
@@ -162,18 +166,19 @@ export function calculateRadialChildPositions(
     if (allValid) break
   }
   
-  // Fallback: If still having issues, use emergency spacing
+  // Fallback: If still having issues, use emergency spacing with OUTWARD guarantee
   if (positions.some(pos => wouldCollide(pos, existingPositions))) {
     positions.length = 0
     for (let i = 0; i < childCount; i++) {
-      // Use a much larger radius as emergency fallback
-      const emergencyRadius = baseRadius * 3
+      // Use a much larger radius as emergency fallback, ensuring it's still outward
+      const emergencyRadius = Math.max(minOutwardRadius * 2, baseRadius * 4)
       const angle = preferredDirection + (i - (childCount - 1) / 2) * (Math.PI / 4)
       positions.push(polarToCartesian(parentPosition, angle, emergencyRadius))
     }
   }
   
-  console.log(`🌱 Radial expansion: ${childCount} nodes from parent at (${parentPosition.x}, ${parentPosition.y})`)
+  console.log(`🌱 OUTWARD Radial expansion: ${childCount} nodes from parent at (${parentPosition.x}, ${parentPosition.y})`)
+  console.log(`📏 Parent distance from center: ${parentDistanceFromCenter.toFixed(1)}px`)
   console.log(`🧭 Preferred direction: ${(preferredDirection * 180 / Math.PI).toFixed(1)}°`)
   console.log(`📍 Child positions:`, positions)
   

@@ -14,6 +14,9 @@ export interface ConceptNode {
     sources?: string[]
     keywords?: string[]
     summary?: string
+    isGenerating?: boolean
+    expectedWidth?: number
+    expectedHeight?: number
   }
 }
 
